@@ -59,6 +59,7 @@ export function loadEnv({ rootDir = process.cwd(), env = process.env } = {}) {
     OWNER_NAME: pick('OWNER_NAME', BOT_DEFAULTS.ownerName),
     GITHUB_URL: pick('GITHUB_URL') || null,
     PROJECT_URL: pick('PROJECT_URL') || null,
+    BOT_IMAGE_PATH: pick('BOT_IMAGE_PATH', 'assets/bot-logo.png'),
     BOT_MODE: pick('BOT_MODE', BOT_DEFAULTS.mode),
     LOG_LEVEL: pick('LOG_LEVEL', 'info'),
     TMP_DIR: pick('TMP_DIR', 'tmp'),

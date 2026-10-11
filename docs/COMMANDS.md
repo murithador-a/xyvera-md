@@ -23,7 +23,7 @@ matching sudo capability), `sudo:<capability>`, `owner`.
 | `.mode` | `<public|private>` | owner | implemented | Switch bot between public and private |
 | `.restart` | — | owner | implemented | Restart the bot process (owner only) |
 | `.setbotbio` | `<text>` | owner | implemented | Set the WhatsApp profile about text |
-| `.setbotpp` | — | owner | implemented | Set the bot profile picture (reply to an image) |
+| `.setbotpp` | — | owner | implemented | Set the bot profile picture (reply to an image, or no args for the bundled logo) |
 | `.setprefix` | `<symbol>` | sudo:bot.settings | implemented | Change the command prefix |
 | `.settings` | — | everyone | implemented | Show global vs group settings |
 | `.sudolist` | — | owner | implemented | List sudo users and their capabilities |
@@ -169,6 +169,7 @@ matching sudo capability), `sudo:<capability>`, `owner`.
 | `.commands` | — | everyone | implemented | List every command with its real implementation status |
 | `.configcheck` | — | owner | implemented | List external providers and whether they are configured |
 | `.github` | — | everyone | implemented | Show the project GitHub link |
+| `.logo` _(aka `.botimage`, `.brand`)_ | — | everyone | implemented | Send the bot branding image |
 | `.menu` _(aka `.help`, `.list`)_ | — | everyone | implemented | Show the full command menu |
 | `.owner` | — | everyone | implemented | Show bot owner contact information |
 | `.ownerconfig` | — | everyone | implemented | Check whether owner identity is configured |

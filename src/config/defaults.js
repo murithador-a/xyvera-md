@@ -158,6 +158,7 @@ export function defaultSettings() {
     ownerNumbers: [], // populated from env on first boot; never guessed
     githubUrl: null,
     projectUrl: null,
+    profilePictureApplied: false, // one-time auto-apply of BOT_IMAGE_PATH on connect
     sudo: {}, // { [jid]: { capabilities: string[], grantedAt, grantedBy } }
     bans: [], // [jid]
   };

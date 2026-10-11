@@ -113,6 +113,26 @@ export default function registerInfoCommands(registry, deps) {
       },
     },
     {
+      name: 'logo',
+      aliases: ['botimage', 'brand'],
+      category: 'info',
+      description: 'Send the bot branding image',
+      access: 'everyone',
+      handler: async (ctx) => {
+        const { promises: fsp } = await import('node:fs');
+        const pathMod = await import('node:path');
+        const rel = ctx.services.env?.BOT_IMAGE_PATH ?? 'assets/bot-logo.png';
+        const imgPath = pathMod.resolve(ctx.services.rootDir ?? process.cwd(), rel);
+        const buf = await fsp.readFile(imgPath).catch(() => null);
+        if (!buf) {
+          await ctx.reply(`No bot image found at ${rel} — the operator can add one and set BOT_IMAGE_PATH in .env.`);
+          return;
+        }
+        const ok = await ctx.client.sendImageBuffer?.(ctx.chatJid, buf, { caption: `🎨 ${getConfig().botName}` });
+        if (!ok?.ok) await ctx.reply('⚠️ Could not send the image in this environment.');
+      },
+    },
+    {
       name: 'setbotname',
       category: 'info',
       description: 'Set the bot display name',

@@ -109,14 +109,24 @@ export default function registerOwnerCommands(registry, deps) {
     {
       name: 'setbotpp',
       category: 'owner',
-      description: 'Set the bot profile picture (reply to an image)',
+      description: 'Set the bot profile picture (reply to an image, or no args for the bundled logo)',
       access: 'owner',
       status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
         const quoted = ctx.msg.quoted;
         const hasImage = !!quoted?.hasMedia || !!ctx.msg.hasMedia;
         if (!hasImage) {
-          await ctx.reply('Reply to an image with .setbotpp (or send an image captioned .setbotpp).');
+          // Apply the bundled bot logo (BOT_IMAGE_PATH) if available.
+          const res = await ctx.services.applyBotProfilePicture?.({ force: true });
+          if (res?.ok) {
+            await ctx.reply(`✅ Profile picture set from the bundled logo (${ctx.services.env?.BOT_IMAGE_PATH ?? 'assets/bot-logo.png'}).`);
+          } else {
+            await ctx.reply(
+              `⚠️ ${res?.reason ?? 'No bundled logo available.'}\n` +
+                'Either drop your logo at assets/bot-logo.png (or set BOT_IMAGE_PATH in .env),\n' +
+                'or reply to an image with .setbotpp.',
+            );
+          }
           return;
         }
         const raw = await ctx.client.downloadMedia(quoted ?? ctx.msg);

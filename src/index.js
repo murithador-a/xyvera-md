@@ -155,10 +155,42 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
     config: getConfig(),
     updateSettings,
     env,
+    rootDir,
+    applyBotProfilePicture: (...args) => applyBotProfilePicture(...args),
   };
 
   let waClient = null;
   let waBotJid = null;
+
+  /**
+   * Apply the bundled/configured bot image (BOT_IMAGE_PATH) as the WhatsApp
+   * profile picture. Runs automatically once after the first connect and on
+   * demand via `.setbotpp`. Reports the real outcome.
+   */
+  const applyBotProfilePicture = async ({ force = false } = {}) => {
+    if (!waClient) return { ok: false, reason: 'not connected to WhatsApp yet' };
+    if (!force && store.settings.get().profilePictureApplied) {
+      return { ok: true, skipped: 'already applied before' };
+    }
+    const imgPath = path.resolve(rootDir, env.BOT_IMAGE_PATH);
+    const buf = await fs.readFile(imgPath).catch(() => null);
+    if (!buf) {
+      return { ok: false, reason: `bot image not found at ${env.BOT_IMAGE_PATH} (set BOT_IMAGE_PATH in .env)` };
+    }
+    let out = buf;
+    try {
+      const { toProfilePicture } = await import('./services/mediaPipeline.js');
+      out = await toProfilePicture(buf);
+    } catch {
+      /* send original if the pipeline cannot decode it */
+    }
+    const res = await waClient.setProfilePictureFromBuffer?.(waBotJid, out);
+    if (res?.ok !== false) {
+      store.settings.update((s) => ({ ...s, profilePictureApplied: true }));
+      return { ok: true };
+    }
+    return { ok: false, reason: res?.reason ?? 'WhatsApp rejected the profile picture change' };
+  };
 
   const app = {
     env,
@@ -186,6 +218,7 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
       waClient = client;
       if (botJid) waBotJid = botJid;
     },
+    applyBotProfilePicture: (...args) => applyBotProfilePicture(...args),
   };
 
   if (!connect) {
@@ -205,6 +238,14 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
       connectionOpen: (jid) => {
         waBotJid = jid;
         logger.info?.(`connected as ${jid}`);
+        // Apply the bot branding image once per install (flag persisted).
+        applyBotProfilePicture()
+          .then((r) => {
+            if (r.skipped) logger.debug?.('profile picture already applied — skipping');
+            else if (r.ok) logger.info?.('bot profile picture applied', { from: env.BOT_IMAGE_PATH });
+            else logger.warn?.('profile picture not applied', { reason: r.reason });
+          })
+          .catch((err) => logger.warn?.('profile picture apply failed', { error: String(err?.message ?? err) }));
       },
     },
   });

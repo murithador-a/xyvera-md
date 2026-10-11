@@ -15,7 +15,8 @@ function mockFetch(handlers) {
         return {
           ok: true,
           status: 200,
-          json: async () => response,
+          json: async () => (typeof response === 'string' ? JSON.parse(response) : response),
+          text: async () => (typeof response === 'string' ? response : JSON.stringify(response)),
           arrayBuffer: async () => response.__bytes ?? new ArrayBuffer(8),
         };
       }
@@ -183,4 +184,42 @@ test('network failures become ExternalServiceError, never fake success', async (
   };
   const p = createProviders({ env: { TRANSLATE_API_KEY: '' }, fetchImpl: f });
   await assert.rejects(() => p.translate('hi', 'en'), ExternalServiceError);
+});
+
+// ── media download provider ─────────────────────────────────────────────
+
+test('downloadMedia without MEDIA_API_URL raises NotConfiguredError', async () => {
+  const p = createProviders({ env: {}, fetchImpl: mockFetch([]) });
+  await assert.rejects(() => p.downloadMedia({ query: 'song' }), NotConfiguredError);
+});
+
+test('downloadMedia requires a {query} or {url} placeholder', async () => {
+  const p = createProviders({ env: { MEDIA_API_URL: 'https://media.example.com/all' }, fetchImpl: mockFetch([]) });
+  await assert.rejects(() => p.downloadMedia({ query: 'song' }), ExternalServiceError);
+});
+
+test('downloadMedia resolves JSON {url,title} and substitutes the template', async () => {
+  const f = mockFetch([['media.example.com', { url: 'https://cdn.example.com/a.mp3', title: 'Track' }]]);
+  const p = createProviders({
+    env: { MEDIA_API_URL: 'https://media.example.com/dl?q={query}', MEDIA_API_KEY: 'k' },
+    fetchImpl: f,
+  });
+  const out = await p.downloadMedia({ query: 'hello world' });
+  assert.equal(out.url, 'https://cdn.example.com/a.mp3');
+  assert.equal(out.title, 'Track');
+  assert.match(f.calls[0].url, /dl\?q=hello%20world/);
+  assert.equal(f.calls[0].opts.headers.authorization, 'Bearer k');
+});
+
+test('downloadMedia accepts a plain-text media URL body', async () => {
+  const f = mockFetch([['media.example.com', 'https://cdn.example.com/b.mp4']]);
+  const p = createProviders({ env: { MEDIA_API_URL: 'https://media.example.com/dl?url={url}' }, fetchImpl: f });
+  const out = await p.downloadMedia({ url: 'https://www.youtube.com/watch?v=x' });
+  assert.equal(out.url, 'https://cdn.example.com/b.mp4');
+  assert.match(f.calls[0].url, /dl\?url=https%3A%2F%2Fwww\.youtube\.com/);
+});
+
+test('downloadMedia refuses unsafe target URLs (SSRF guard)', async () => {
+  const p = createProviders({ env: { MEDIA_API_URL: 'https://media.example.com/dl?url={url}' }, fetchImpl: mockFetch([]) });
+  await assert.rejects(() => p.downloadMedia({ url: 'http://127.0.0.1/admin' }), ExternalServiceError);
 });

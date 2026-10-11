@@ -288,22 +288,54 @@ export default function registerAiCommands(registry, deps) {
       },
     },
 
-    // ── media downloads: no legitimate universal provider ───────────────
-    ...['play', 'song', 'video', 'tiktok', 'instagram'].map((name) => ({
-      name,
-      category: 'media',
-      description: `Download media via a licensed provider (${name})`,
-      args: '<query|url>',
-      access: 'everyone',
-      status: COMMAND_STATUS.STUB,
-      handler: async (ctx) => {
-        await ctx.reply(
-          `🔧 *${name}* needs a licensed media provider (API key + terms that permit downloading).\n` +
-            'No reliable legitimate provider is configured, so this command will not pretend to work.\n' +
-            'Set MEDIA_API_URL/MEDIA_API_KEY once a provider is chosen (docs/REQUIREMENTS.md §3.8).',
-        );
-      },
-    })),
+    // ── media downloads: real once MEDIA_API_URL is configured ─────────
+    ...['play', 'song', 'video', 'tiktok', 'instagram'].map((name) => {
+      const isAudio = name === 'play' || name === 'song';
+      return {
+        name,
+        category: 'media',
+        description: `Download media via a licensed provider (${name}${isAudio ? ', audio' : ', video'})`,
+        args: '<query|url>',
+        access: 'everyone',
+        status: COMMAND_STATUS.IMPLEMENTED,
+        handler: async (ctx) => {
+          const env = ctx.services.env ?? {};
+          const input = (ctx.rest ?? '').trim();
+          if (!input) {
+            await ctx.reply(`Usage: ${ctx.services.config?.prefix ?? '.'}${name} <query|url>`);
+            return;
+          }
+          if (!env.MEDIA_API_URL) {
+            await ctx.reply(
+              `🔧 *${name}* needs a licensed media provider (API + terms that permit downloading).\n` +
+                'No provider is bundled, so this command will not pretend to work.\n' +
+                'Set MEDIA_API_URL/MEDIA_API_KEY once a provider is chosen (docs/REQUIREMENTS.md §3.8).',
+            );
+            return;
+          }
+          const isUrl = /^https?:\/\//i.test(input);
+          await ctx.reply(`⏳ Looking up *${name}*…`).catch(() => {});
+          try {
+            const out = await ctx.services.providers.downloadMedia({
+              query: isUrl ? null : input,
+              url: isUrl ? input : null,
+            });
+            const content = isAudio
+              ? { audio: { url: out.url }, mimetype: out.mimetype ?? 'audio/mpeg' }
+              : { video: { url: out.url }, caption: out.title ? `🎬 ${out.title}` : '🎬' };
+            const sent = await ctx.client.sendMediaFromMessage?.(ctx.chatJid, content);
+            if (!sent) await ctx.reply('⚠️ Could not send the media in this environment.');
+          } catch (err) {
+            const { NotConfiguredError } = await import('../../utils/errors.js');
+            if (err instanceof NotConfiguredError) {
+              await ctx.reply(`🔧 ${err.message}`);
+            } else {
+              await ctx.reply(`⚠️ ${name} failed: ${String(err?.message ?? err)}`);
+            }
+          }
+        },
+      };
+    }),
     {
       name: 'reminder',
       category: 'utilities',

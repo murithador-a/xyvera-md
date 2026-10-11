@@ -199,6 +199,55 @@ export function createProviders({ env, fetchImpl = null } = {}) {
       if (buf.length === 0) throw new ExternalServiceError('Screenshot service returned an empty image.');
       return buf;
     },
+
+    /**
+     * Media download resolver (.play/.song/.video/.tiktok/.instagram).
+     *
+     * Contract: MEDIA_API_URL is a template containing {query} and/or {url}.
+     * The provider answers with JSON `{ "url": "<media file url>", "title?": …,
+     * "mimetype?": … }` (or a plain-text media URL). WhatsApp then fetches the
+     * media file directly from that URL. Requires a licensed provider whose
+     * terms permit the download — no provider is bundled.
+     */
+    async downloadMedia({ query = null, url = null } = {}) {
+      const template = e('MEDIA_API_URL');
+      if (!template) {
+        throw new NotConfiguredError('media downloads', 'MEDIA_API_URL (licensed provider) + MEDIA_API_KEY');
+      }
+      if (!template.includes('{query}') && !template.includes('{url}')) {
+        throw new ExternalServiceError('MEDIA_API_URL must contain a {query} or {url} placeholder.');
+      }
+      if (url) {
+        const check = isSafePublicUrl(url);
+        if (!check.ok) throw new ExternalServiceError(`Refusing to fetch: ${check.reason}`);
+      }
+      const finalUrl = template
+        .replace('{query}', encodeURIComponent(query ?? ''))
+        .replace('{url}', encodeURIComponent(url ?? ''));
+      const key = e('MEDIA_API_KEY');
+      let res;
+      try {
+        res = await f(finalUrl, {
+          headers: key ? { authorization: `Bearer ${key}` } : {},
+          signal: AbortSignal.timeout(TIMEOUT_MS * 2),
+        });
+      } catch (err) {
+        throw new ExternalServiceError(`Media provider request failed: ${String(err?.message ?? err)}`);
+      }
+      if (!res.ok) throw new ExternalServiceError(`Media provider returned HTTP ${res.status}.`);
+      const text = String(await res.text() ?? '').trim();
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        /* plain-text media URL */
+      }
+      const mediaUrl = String(data?.url ?? text).trim();
+      if (!/^https?:\/\//i.test(mediaUrl)) {
+        throw new ExternalServiceError('Media provider returned no media URL.');
+      }
+      return { url: mediaUrl, title: data?.title ?? null, mimetype: data?.mimetype ?? null };
+    },
   };
 }
 

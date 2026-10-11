@@ -123,15 +123,15 @@ matching sudo capability), `sudo:<capability>`, `owner`.
 | Command | Arguments | Access | Status | Description |
 |---------|-----------|--------|--------|-------------|
 | `.blur` | `[radius]` | everyone | implemented | Blur a replied image (optional radius 1-100) |
-| `.instagram` | `<query|url>` | everyone | stub-config-required | Download media via a licensed provider (instagram) |
+| `.instagram` | `<query|url>` | everyone | implemented | Download media via a licensed provider (instagram, video) |
 | `.lyrics` | `<artist> - <title>` | everyone | implemented | Look up song lyrics (lyrics.ovh) |
 | `.meme` | `<top> | <bottom>` | everyone | implemented | Caption a replied image: <top> \| <bottom> |
-| `.play` | `<query|url>` | everyone | stub-config-required | Download media via a licensed provider (play) |
-| `.song` | `<query|url>` | everyone | stub-config-required | Download media via a licensed provider (song) |
+| `.play` | `<query|url>` | everyone | implemented | Download media via a licensed provider (play, audio) |
+| `.song` | `<query|url>` | everyone | implemented | Download media via a licensed provider (song, audio) |
 | `.sticker` _(aka `.s`)_ | — | everyone | implemented | Turn a replied image into a sticker |
-| `.tiktok` | `<query|url>` | everyone | stub-config-required | Download media via a licensed provider (tiktok) |
+| `.tiktok` | `<query|url>` | everyone | implemented | Download media via a licensed provider (tiktok, video) |
 | `.toimg` | — | everyone | implemented | Convert a replied sticker back to an image |
-| `.video` | `<query|url>` | everyone | stub-config-required | Download media via a licensed provider (video) |
+| `.video` | `<query|url>` | everyone | implemented | Download media via a licensed provider (video, video) |
 | `.vv` _(aka `.vv2`)_ | — | everyone | implemented | Why view-once media cannot be revealed (privacy policy) |
 
 ## Utilities

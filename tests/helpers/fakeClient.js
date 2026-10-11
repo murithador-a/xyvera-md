@@ -160,6 +160,13 @@ export class FakeWhatsAppClient {
     return { ok: true };
   }
 
+  async sendMediaFromMessage(jid, content, opts = {}) {
+    this._rec('sendMediaFromMessage', content);
+    if (this.fail.sendMediaFromMessage) return undefined;
+    this.sent.push({ jid, text: '[media]', opts: { content, ...opts } });
+    return { ok: true };
+  }
+
   async setProfilePictureFromBuffer(jid, buffer) {
     this._rec('setProfilePictureFromBuffer', jid);
     return this.fail.setProfilePictureFromBuffer

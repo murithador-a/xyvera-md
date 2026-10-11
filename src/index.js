@@ -234,9 +234,32 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
   const { attachEventHandlers } = await import('./whatsapp/events.js');
   const { createClientAdapter } = await import('./whatsapp/client.js');
 
-  const { sock } = await connectWhatsApp({
+  let remindersRestored = false;
+  /**
+   * Bind the LIVE socket (first connect and every reconnect) to a fresh
+   * adapter + event handlers. Without this, a reconnect leaves the app
+   * sending through a dead socket forever.
+   */
+  const wireSocket = (sock) => {
+    waClient = createClientAdapter(sock, { logger, tmpDir });
+    attachEventHandlers(sock, {
+      router,
+      moderation,
+      statusAutomation,
+      groupsRepo: store.groups,
+      logger,
+      client: waClient,
+    });
+    if (!remindersRestored) {
+      reminders.restore(); // re-arm persisted timers once per process
+      remindersRestored = true;
+    }
+  };
+
+  await connectWhatsApp({
     env,
     logger,
+    onNewSocket: wireSocket,
     onEvent: {
       connectionOpen: (jid) => {
         waBotJid = jid;
@@ -253,23 +276,9 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
     },
   });
 
-  waClient = createClientAdapter(sock, { logger, tmpDir });
-
-  attachEventHandlers(sock, {
-    router,
-    moderation,
-    statusAutomation,
-    groupsRepo: store.groups,
-    logger,
-    client: waClient,
-  });
-
   // Wire handler services into dispatches (router.dispatch receives services arg)
   const originalDispatch = router.dispatch.bind(router);
   router.dispatch = (msg, client, _svc) => originalDispatch(msg, client, services);
-
-  // Re-arm persisted reminders now that a client is available.
-  reminders.restore();
 
   logger.info?.('Xyvera MD started', { commands: registry.size, mode: permissions.getMode() });
   return app;
@@ -280,6 +289,12 @@ const entryHref = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1]))
 const isMain = entryHref === import.meta.url;
 if (isMain) {
   const check = process.argv.includes('--check');
+  const shutdown = (sig) => {
+    process.stdout.write(`\n${sig} received — shutting down Xyvera MD…\n`);
+    process.exit(0);
+  };
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
   bootstrap({ connect: !check })
     .then((app) => {
       if (check) {

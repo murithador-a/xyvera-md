@@ -30,6 +30,8 @@ cp .env.example .env && nano .env      # set OWNER_NUMBERS etc.
 # 3. First run to pair WhatsApp (QR in terminal over SSH)
 npm start
 # scan the QR, confirm "connected as …", then Ctrl+C
+# Headless alternative: the QR is also written to data/qr.png — copy it off
+# the server (scp) and scan that image with WhatsApp → Linked devices.
 
 # 4. Supervisor — systemd
 sudo tee /etc/systemd/system/xyvera-md.service <<'UNIT'
@@ -53,7 +55,15 @@ sudo useradd -r xyvera && sudo chown -R xyvera /opt/xyvera-md
 sudo systemctl enable --now xyvera-md
 ```
 
-PM2 alternative: `pm2 start src/index.js --name xyvera-md && pm2 save && pm2 startup`.
+PM2 alternative: `pm2 start deploy/ecosystem.config.cjs && pm2 save && pm2 startup`.
+
+## Process exit codes
+
+| Code | Meaning | Operator action |
+|------|---------|-----------------|
+| 0 | Clean shutdown (SIGINT/SIGTERM) | none |
+| 2 | Session logged out / revoked by WhatsApp | delete `data/session/`, restart, scan the new QR in `data/qr.png` |
+| 75 | Restart requested (`.restart` / after `.clearsession`) | none — supervisor restarts automatically |
 
 ## `.restart` and `.clearsession`
 

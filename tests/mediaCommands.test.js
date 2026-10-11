@@ -132,3 +132,42 @@ test('greeting media config saves through the client', async () => {
   assert.ok(gc.welcome.mediaPath);
   await h.cleanup();
 });
+
+test('media download commands work when a licensed provider is configured', async () => {
+  const h = await createHarness({ env: { OWNER_NUMBERS: '15550000000', MEDIA_API_URL: 'https://media.example.com/dl?q={query}' } });
+  h.app.services.providers.downloadMedia = async ({ query }) => ({
+    url: 'https://cdn.example.com/a.mp3',
+    title: `resolved:${query}`,
+    mimetype: 'audio/mpeg',
+  });
+  await h.dispatch('.play never gonna give you up', { senderJid: ALICE });
+  const sent = h.client.sent.find((s) => s.text === '[media]');
+  assert.ok(sent, 'media was sent');
+  assert.equal(sent.opts.content.audio.url, 'https://cdn.example.com/a.mp3');
+  assert.equal(sent.opts.content.mimetype, 'audio/mpeg');
+
+  h.client.sent.length = 0;
+  await h.dispatch('.video funny cats', { senderJid: ALICE });
+  const vid = h.client.sent.find((s) => s.text === '[media]');
+  assert.ok(vid);
+  assert.ok(vid.opts.content.video.url);
+  assert.match(vid.opts.content.caption, /🎬/);
+  await h.cleanup();
+});
+
+test('media download commands report real provider failures honestly', async () => {
+  const h = await createHarness({ env: { OWNER_NUMBERS: '15550000000', MEDIA_API_URL: 'https://media.example.com/dl?q={query}' } });
+  h.app.services.providers.downloadMedia = async () => {
+    throw new Error('Media provider returned HTTP 429.');
+  };
+  await h.dispatch('.play some song', { senderJid: ALICE });
+  assert.match(h.lastSent().text, /failed: Media provider returned HTTP 429/);
+  await h.cleanup();
+});
+
+test('media download commands stay honest without a provider', async () => {
+  const h = await createHarness({ env: { OWNER_NUMBERS: '15550000000' } });
+  await h.dispatch('.play some song', { senderJid: ALICE });
+  assert.match(h.lastSent().text, /licensed media provider|will not pretend/i);
+  await h.cleanup();
+});

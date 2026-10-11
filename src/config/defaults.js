@@ -31,8 +31,8 @@ export const CAPABILITIES = Object.freeze({
 export const ALL_CAPABILITIES = Object.freeze(Object.values(CAPABILITIES));
 
 /**
- * Anti-link internal action names. Numeric aliases are PENDING OWNER APPROVAL
- * (docs/REQUIREMENTS.md §2.1) and are intentionally NOT wired to any behavior.
+ * Anti-link internal action names. Group configuration stores ONLY these named
+ * values — never a number (see NUMERIC_ACTION_ALIASES below).
  */
 export const ANTI_LINK_ACTIONS = Object.freeze({
   DELETE: 'delete',
@@ -44,18 +44,22 @@ export const ANTI_LINK_ACTIONS = Object.freeze({
 export const ANTI_LINK_ACTION_LIST = Object.freeze(Object.values(ANTI_LINK_ACTIONS));
 
 /**
- * Numeric action aliases — APPROVED mapping (docs/REQUIREMENTS.md §2.1).
- * These are convenience aliases for the named values below; only named values
- * are ever stored in group configuration.
+ * Numeric action aliases — APPROVED mapping, in effect (docs/REQUIREMENTS.md §2.1):
+ *   1 = delete, 2 = delete-warn, 3 = delete-kick, 4 = escalate
+ * Input convenience only: group configuration always stores the named value.
  */
-export const PROPOSED_NUMERIC_ACTION_ALIASES = Object.freeze({
+export const NUMERIC_ACTION_ALIASES = Object.freeze({
   1: ANTI_LINK_ACTIONS.DELETE,
   2: ANTI_LINK_ACTIONS.DELETE_WARN,
   3: ANTI_LINK_ACTIONS.DELETE_KICK,
   4: ANTI_LINK_ACTIONS.ESCALATE,
 });
 
-export const NUMERIC_ACTION_ALIASES_APPROVED = true;
+/**
+ * @deprecated The proposal was approved on 2026-10-11; kept so older imports
+ * keep working. Use NUMERIC_ACTION_ALIASES.
+ */
+export const PROPOSED_NUMERIC_ACTION_ALIASES = NUMERIC_ACTION_ALIASES;
 
 /** Responses to anti-tag / anti-bad-word / warning escalation. */
 export const MODERATION_RESPONSES = Object.freeze({

@@ -71,7 +71,11 @@ Facts taken from the official sources (github.com/WhiskeySockets/Baileys, bailey
 ├────────────────────────────────────────────────────────────────────┤
 │  Foundation (src/config/, src/utils/)                             │
 │  env.js defaults.js  logger.js errors.js validators.js             │
-│  cooldowns.js templates.js                                         │
+│  cooldowns.js templates.js  providerCatalog.js                     │
+├────────────────────────────────────────────────────────────────────┤
+│  Verification & operations (src/diagnostics/, scripts/, deploy/)   │
+│  doctor.js (offline preflight)  liveSmoke.js (observed live report)│
+│  verify-commands-doc.mjs  live-smoke.mjs  CI  systemd/PM2/Docker    │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -228,10 +232,15 @@ handler changes.
 - Pure-logic suites: permissions/modes/bans, per-group isolation, templates, anti-link
   decisions & exemptions & dedupe, anti-tag, anti-bad-word, warnings/escalation,
   confirmations, tic-tac-toe engine, JSON store (atomicity, malformed recovery,
-  migrations), router pipeline with a fake `WhatsAppClient`, menu generation.
+  migrations), router pipeline with a fake `WhatsAppClient`, menu generation,
+  preflight doctor, live-smoke engine (observed-evidence invariants), and the
+  registry ↔ `docs/COMMANDS.md` sync gate.
 - No test requires a live WhatsApp account, network, or API keys.
-- `npm run lint` = syntax/static sanity across all modules (`node --check`); `npm test`;
-  `npm run check` runs both.
+- `npm run lint` = syntax/static sanity across all modules (`node --check`);
+  `npm run verify:docs` fails when the generated command reference is stale;
+  `npm test`; `npm run check` runs all three. CI
+  (`.github/workflows/ci.yml`) does the same on Node 20 and 22, plus a
+  `--check` boot and `--doctor` preflight.
 
 ## 10. Windows → cloud path
 
@@ -250,3 +259,30 @@ is: (1) documented with provider, pricing implications, rate limits; (2) configu
 env; (3) behind `services/*Provider.js` adapters; (4) reported as
 "not configured — add X to .env" when unset. None is faked. SSRF-safe URL handling for
 `.screenshot` (private IP / localhost / file scheme blocked in `utils/validators.js`).
+
+The requirements matrix lives in **`src/config/providerCatalog.js`** — one source of
+truth consumed by `.configcheck`, the `--doctor` preflight and the docs, so the operator
+can never be told two different things about whether a feature is ready.
+
+## 12. Verification & operations tooling
+
+Two different questions, two different tools — neither one fakes the other:
+
+- **`node src/index.js --doctor [--json]`** (`src/diagnostics/doctor.js`) — *is this
+  install ready?* Offline preflight: runtime version, `.env`, owner identity, prefix,
+  mode, writable `data/`+`tmp/`, quarantined files, storage schema, session presence,
+  branding asset, provider readiness, registry size. Each check prints the evidence it
+  observed and the exact fix; exit code 1 only for hard failures. Used by CI and by
+  operators before/after deploys.
+- **`npm run smoke:live`** (`src/diagnostics/liveSmoke.js` + `scripts/live-smoke.mjs`) —
+  *does the real WhatsApp adapter work?* Connects with the operator's session and records
+  only observed events: QR emitted, connection open, inbound message normalized, command
+  → reply round trip, optional outbound send and group metadata. The engine enforces the
+  invariant that a step cannot be marked `passed` without evidence; unexercised steps are
+  `skipped`/`not-observed`. Reports land in `data/live-smoke-report.json`.
+- **Docs-sync gate** (`scripts/verify-commands-doc.mjs`) — regenerates
+  `docs/COMMANDS.md` from the live registry in memory and fails when the committed file
+  is stale; wired into `npm run check`, CI, and a unit test.
+- **Deploy artifacts** (`deploy/`) — systemd unit, PM2 config, Dockerfile,
+  docker-compose; single-instance by design, `data/` as the persistent volume, exit
+  codes 2 (logged out) and 75 (restart requested) as the restart contract.

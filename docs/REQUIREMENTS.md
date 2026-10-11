@@ -1,9 +1,9 @@
 # Xyvera MD — Requirements
 
-Status: Phase 0/1 baseline. This document records **confirmed decisions**, **proposed
-behavior awaiting approval**, and **unresolved questions**. It is the source of truth for
-what the bot is expected to do; nothing not described here (or explicitly marked
-"pending") may be silently implemented.
+Status: current through **Phase 2** (see `docs/PHASE-REPORTS.md`). This document records
+**confirmed decisions**, **resolved questions**, and **unresolved questions**. It is the
+source of truth for what the bot is expected to do; nothing not described here (or
+explicitly marked "pending") may be silently implemented.
 
 Working name: **Xyvera MD** (display/branding name). The WhatsApp profile/menu styling
 may use a distinctive presentation later; the product name is not settled and the code
@@ -268,6 +268,17 @@ the documented safe default (`docs/LIMITATIONS.md`, `src/config/defaults.js`).
 
 The capability families in §1.5 are confirmed; the exact default mapping of each command
 to a capability is generated into `docs/COMMANDS.md` and can be overridden per group later.
+
+### 2.4 Verification method (Phase 2)
+
+- Offline truth: `npm run check` (lint + registry ↔ docs sync gate + 213 tests) and
+  `node src/index.js --doctor` (preflight; exit 1 only on hard failures).
+- Live truth: `npm run smoke:live` observes real WhatsApp events and reports
+  `passed` only with evidence; anything unexercised stays `skipped`/`not-observed`.
+  Recorded outcomes live in `docs/PHASE-REPORTS.md` — a phase is not "verified"
+  until its live checks are recorded there.
+- Provider readiness has exactly one source of truth: `src/config/providerCatalog.js`
+  (consumed by `.configcheck`, `--doctor`, and the docs).
 
 ---
 

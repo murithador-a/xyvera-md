@@ -37,7 +37,13 @@ import registerGameCommands from './commands/games/index.js';
 import registerAiCommands from './commands/ai/index.js';
 import registerUtilityCommands from './commands/utilities/index.js';
 
-export async function bootstrap({ rootDir = process.cwd(), connect = true, env: envOverride = {} } = {}) {
+export async function bootstrap({
+  rootDir = process.cwd(),
+  connect = true,
+  env: envOverride = {},
+  onNewSocket: onNewSocketHook = null,
+  onEvent: onEventHook = {},
+} = {}) {
   const env = loadEnv({ rootDir, env: { ...process.env, ...envOverride } });
   const logger = createLogger({ level: env.LOG_LEVEL });
 
@@ -259,8 +265,14 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
   await connectWhatsApp({
     env,
     logger,
-    onNewSocket: wireSocket,
+    // Hooks run AFTER the app's own wiring so external tools (live smoke test)
+    // observe exactly the socket the app is using.
+    onNewSocket: (sock) => {
+      wireSocket(sock);
+      onNewSocketHook?.(sock, waClient);
+    },
     onEvent: {
+      ...onEventHook,
       connectionOpen: (jid) => {
         waBotJid = jid;
         logger.info?.(`connected as ${jid}`);
@@ -272,6 +284,7 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
             else logger.warn?.('profile picture not applied', { reason: r.reason });
           })
           .catch((err) => logger.warn?.('profile picture apply failed', { error: String(err?.message ?? err) }));
+        onEventHook.connectionOpen?.(jid);
       },
     },
   });
@@ -289,37 +302,80 @@ const entryHref = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1]))
 const isMain = entryHref === import.meta.url;
 if (isMain) {
   const check = process.argv.includes('--check');
+  const doctor = process.argv.includes('--doctor');
+  const asJson = process.argv.includes('--json');
   const shutdown = (sig) => {
     process.stdout.write(`\n${sig} received — shutting down Xyvera MD…\n`);
     process.exit(0);
   };
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
-  bootstrap({ connect: !check })
-    .then((app) => {
-      if (check) {
-        const byCat = {};
-        for (const cmd of app.registry.list()) {
-          byCat[cmd.category] = (byCat[cmd.category] ?? 0) + 1;
-        }
-        console.log(
-          JSON.stringify(
-            {
-              ok: true,
-              commands: app.registry.size,
-              byCategory: byCat,
-              mode: app.permissions.getMode(),
-              ownersConfigured: app.permissions.ownerJids().length,
-              schemaVersion: SCHEMA_VERSION,
-            },
-            null,
-            2,
-          ),
-        );
-      }
-    })
-    .catch((err) => {
+
+  /** `--doctor`: preflight report; exit 1 only on hard failures. */
+  const runDoctorCli = async () => {
+    const { runDoctor, renderDoctorReport, exitCodeFor } = await import('./diagnostics/doctor.js');
+    let app = null;
+    let bootError = null;
+    try {
+      // --json must be machine-parseable: keep the logger off stdout.
+      app = await bootstrap({ connect: false, env: asJson ? { LOG_LEVEL: 'silent' } : {} });
+    } catch (err) {
+      bootError = err; // still report everything else we can observe
+    }
+    const report = await runDoctor({
+      rootDir: process.cwd(),
+      env: app?.env ?? loadEnv({ rootDir: process.cwd(), env: {} }),
+      store: app?.store ?? null,
+      app,
+    });
+    if (bootError) {
+      report.checks.push({
+        id: 'bootstrap',
+        label: 'Application bootstrap',
+        state: 'fail',
+        detail: `could not initialize: ${String(bootError?.message ?? bootError)}`,
+        fix: 'Fix the storage/permission problem above, then re-run: node src/index.js --doctor',
+      });
+      report.summary.fail += 1;
+      report.summary.ok = false;
+    }
+    process.stdout.write(`${asJson ? JSON.stringify(report, null, 2) : renderDoctorReport(report)}\n`);
+    process.exit(exitCodeFor(report));
+  };
+
+  if (doctor) {
+    runDoctorCli().catch((err) => {
       console.error('FATAL:', err?.stack ?? err);
       process.exit(1);
     });
+  } else {
+    // --check prints JSON only; silence the logger so the output is parseable.
+    bootstrap({ connect: !check, env: check ? { LOG_LEVEL: 'silent' } : {} })
+      .then((app) => {
+        if (check) {
+          const byCat = {};
+          for (const cmd of app.registry.list()) {
+            byCat[cmd.category] = (byCat[cmd.category] ?? 0) + 1;
+          }
+          console.log(
+            JSON.stringify(
+              {
+                ok: true,
+                commands: app.registry.size,
+                byCategory: byCat,
+                mode: app.permissions.getMode(),
+                ownersConfigured: app.permissions.ownerJids().length,
+                schemaVersion: SCHEMA_VERSION,
+              },
+              null,
+              2,
+            ),
+          );
+        }
+      })
+      .catch((err) => {
+        console.error('FATAL:', err?.stack ?? err);
+        process.exit(1);
+      });
+  }
 }

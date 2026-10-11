@@ -63,7 +63,7 @@ matching sudo capability), `sudo:<capability>`, `owner`.
 | `.antibadword` | `<on|off>` | group-admin:security.manage | implemented | Anti-bad-word: on\|off — per-group word list |
 | `.antidelete` | `<on|off>` | group-admin:security.manage | partial | Toggle anti-delete for this group (observed messages only) |
 | `.antilink` | `<on|off|action <name>>` | group-admin:security.manage | implemented | Anti-link: on\|off\|action <name> — per-group |
-| `.antilink-actions` | — | everyone | implemented | Explain the anti-link action values (incl. pending numeric aliases) |
+| `.antilink-actions` | — | everyone | implemented | Explain the anti-link action values (named + numeric aliases 1-4) |
 | `.antitag` | `<on|off|limit <n>>` | group-admin:security.manage | implemented | Anti-tag: on\|off\|limit <n> — per-group |
 | `.delbadword` | `<word>` | group-admin:security.manage | implemented | Remove a word from this group’s bad-word list |
 | `.dellink` _(aka `.disallowlink`)_ | `<domain>` | group-admin:security.manage | implemented | Remove a domain from this group’s allowlist |
@@ -179,15 +179,15 @@ matching sudo capability), `sudo:<capability>`, `owner`.
 
 ## Anti-link actions
 
-Named values are final. Numeric aliases are **pending owner approval** and are
-rejected until approved (see `docs/REQUIREMENTS.md` §2.1):
+Numeric aliases 1–4 are **approved and in effect** (`docs/REQUIREMENTS.md` §2.1).
+Group configuration always stores the **named** value.
 
-| Name | Behavior |
-|------|----------|
-| `delete` | Delete the violating message |
-| `delete-warn` | Delete + warn (counts toward the group warning threshold) |
-| `delete-kick` | Delete + remove the sender |
-| `escalate` | Delete + warn; remove only if the group configured `warnings.actionOnThreshold = kick` |
+| Name | Alias | Behavior |
+|------|-------|----------|
+| `delete` | 1 | Delete the violating message |
+| `delete-warn` | 2 | Delete + warn (counts toward the group warning threshold) |
+| `delete-kick` | 3 | Delete + remove the sender |
+| `escalate` | 4 | Delete + warn; remove only if the group configured `warnings.actionOnThreshold = kick` |
 
 ## Sudo capabilities
 

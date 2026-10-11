@@ -1,0 +1,28 @@
+# Xyvera MD — docker compose (single instance by design: the JSON store is
+# single-writer, and one WhatsApp session must not be used by two processes).
+#
+# Usage:
+#   cp .env.example .env   # set OWNER_NUMBERS at minimum
+#   docker compose -f deploy/docker-compose.yml up -d
+#   docker compose -f deploy/docker-compose.yml logs -f   # scan the QR here
+#
+# First run prints the pairing QR in the logs and writes it to data/qr.png
+# on the mounted volume (scan that file with WhatsApp → Linked devices).
+
+services:
+  xyvera-md:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: xyvera-md:local
+    container_name: xyvera-md
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    volumes:
+      - ../data:/app/data
+      - ../tmp:/app/tmp
+    # Exit code 75 means "restart requested" (.restart / .clearsession);
+    # docker's restart policy covers it, matching the systemd/PM2 setup.
+    stop_grace_period: 30s
+    init: true

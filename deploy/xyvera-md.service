@@ -1,0 +1,38 @@
+# Xyvera MD — systemd unit (Ubuntu/Debian VPS).
+#
+# Install:
+#   sudo cp deploy/xyvera-md.service /etc/systemd/system/xyvera-md.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now xyvera-md
+#
+# Adjust WorkingDirectory/User to match the install (see docs/DEPLOYMENT.md).
+
+[Unit]
+Description=Xyvera MD WhatsApp bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/xyvera-md
+ExecStart=/usr/bin/node src/index.js
+EnvironmentFile=/opt/xyvera-md/.env
+User=xyvera
+# Restart on any exit, including 75 ("restart requested" by .restart /
+# .clearsession) and 2 (session logged out — restarting surfaces a fresh QR,
+# though the operator should delete data/session first in that case).
+Restart=always
+RestartSec=5
+# Graceful WhatsApp socket shutdown.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Hardening: system paths stay read-only; the bot writes only inside the
+# working directory (data/, tmp/) and its private /tmp.
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

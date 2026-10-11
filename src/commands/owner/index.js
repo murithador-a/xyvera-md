@@ -344,6 +344,22 @@ async function runConfirmedAction(ctx, rec, deps) {
       }
       break;
     }
+    case 'escalation-kick': {
+      const target = rec.meta.target;
+      if (!target) {
+        await ctx.reply('⚠️ Missing escalation target.');
+        break;
+      }
+      const removed = await ctx.client.kickParticipant(rec.meta.chatJid ?? ctx.chatJid, target);
+      if (removed) {
+        await ctx.reply(`🚨 Removed ${displayJid(target)} — warning threshold reached (confirmed).`);
+      } else {
+        await ctx.reply(
+          `⚠️ WhatsApp rejected the removal of ${displayJid(target)} (bot may lack admin rights).`,
+        );
+      }
+      break;
+    }
     default:
       await ctx.reply(`Unknown confirmation action: ${rec.action}`);
   }

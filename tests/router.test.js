@@ -265,6 +265,30 @@ test('named anti-link actions apply; invalid ones rejected', async () => {
   await h.cleanup();
 });
 
+test('warning escalation kick is confirm-gated and executes on .confirm', async () => {
+  const h = await harnessWith();
+  // group is configured to kick at threshold 2
+  await h.dispatch('.warn 15550000002 one', { senderJid: ALICE });
+  h.app.store.groups.set(h.groupJid, {
+    ...h.app.store.groups.get(h.groupJid),
+    warnings: { threshold: 2, actionOnThreshold: 'kick' },
+  });
+  await h.dispatch('.warn 15550000002 two', { senderJid: ALICE });
+  assert.match(h.lastSent().text, /threshold/i);
+  // nothing kicked yet — confirmation required
+  assert.equal(h.client.calls.find((c) => c.name === 'kickParticipant'), undefined);
+
+  // another user cannot confirm
+  await h.dispatch('.confirm', { senderJid: BOB });
+  assert.equal(h.client.calls.find((c) => c.name === 'kickParticipant'), undefined);
+
+  await h.dispatch('.confirm', { senderJid: ALICE });
+  const kick = h.client.calls.find((c) => c.name === 'kickParticipant');
+  assert.ok(kick, 'expected an escalation kick after .confirm');
+  assert.equal(kick.args[1], BOB);
+  await h.cleanup();
+});
+
 test('warn/warnings/delwarn/resetwarn flow with thresholds', async () => {
   const h = await harnessWith();
   await h.dispatch('.warn 15550000002 first', { senderJid: ALICE });

@@ -372,7 +372,7 @@ export default function registerGroupCommands(registry, deps) {
           ctx.requireConfirmation(
             'escalation-kick',
             `🚨 @${displayJid(target)} reached the warning threshold and this group is configured to remove on threshold.\nType \`.confirm\` within 60 seconds to remove them, or \`.cancel\`.`,
-            { target },
+            { target, chatJid: ctx.chatJid },
           );
         }
       },

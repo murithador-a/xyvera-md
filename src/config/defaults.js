@@ -9,7 +9,7 @@ export const BOT_DEFAULTS = Object.freeze({
   version: '0.1.0',
   prefix: '.',
   mode: 'public', // 'public' | 'private'
-  ownerName: 'Owner',
+  ownerName: 'Murking',
 });
 
 export const MODES = Object.freeze({ PUBLIC: 'public', PRIVATE: 'private' });

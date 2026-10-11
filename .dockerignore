@@ -1,0 +1,14 @@
+# Never ship secrets, session state, or local runtime data in the image.
+.env
+.env.*
+!.env.example
+data/
+tmp/
+node_modules/
+.git/
+.github/
+coverage/
+logs/
+*.log
+docs/
+tests/

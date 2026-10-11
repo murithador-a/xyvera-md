@@ -37,11 +37,15 @@ Never commit `.env`. Never share `data/session/` — it is the WhatsApp login.
 ## 3. Verify without connecting
 
 ```powershell
-npm run check          # syntax check + full test suite (offline, no account)
+npm run check          # syntax check + docs sync + full test suite (offline)
 node src/index.js --check
+npm run doctor         # preflight report: what is configured / still missing
 ```
 
 `--check` initializes storage, registers all commands, and exits — no network.
+`--doctor` prints each check with observed evidence and an exact fix for
+anything wrong (`⚠️` warnings are fine on a fresh checkout; `❌` failures exit 1).
+Add `--json` for machine-readable output.
 
 ## 4. Start and link WhatsApp (QR)
 
@@ -66,6 +70,24 @@ In a group: `.gcstatus` shows the group's (default, all-off) config.
 To exercise group-admin commands, add the bot account to a group and make it
 an admin.
 
+### Instrumented live smoke test (`npm run smoke:live`)
+
+This is the only way to verify the Baileys adapter against a real account, and
+it reports only what it actually observed:
+
+```powershell
+npm run smoke:live                        # QR (if needed) + inbound + command reply
+npm run smoke:live -- --to 15551234567    # also prove the outbound socket
+npm run smoke:live -- --group 120363…@g.us  # also prove group metadata fetching
+```
+
+What to expect: the script connects, tells you to scan the QR (if unpaired) and
+to send a normal message followed by a command such as `.ping` from another
+phone. It prints a per-step report, writes `data/live-smoke-report.json`, and
+exits 0 **only** when every required step was observed. Steps that did not
+happen are labelled `skipped`/`not-observed` — an incomplete run is an
+incomplete run, not a pass.
+
 ## 6. Troubleshooting
 
 | Symptom | Fix |
@@ -87,4 +109,8 @@ logic under `src/services/*`, persistence under `src/storage/*`.
 
 ```powershell
 node scripts/gen-commands.mjs   # rewrites docs/COMMANDS.md from the registry
+npm run verify:docs             # fails if the committed doc is stale
 ```
+
+`npm run check` runs the docs-sync gate too, so a command change that is not
+regenerated into `docs/COMMANDS.md` fails the build.

@@ -7,6 +7,7 @@
  */
 
 import { COMMAND_STATUS } from '../../config/defaults.js';
+import { providerStatus } from '../../config/providerCatalog.js';
 import { NotConfiguredError, ExternalServiceError } from '../../utils/errors.js';
 import { isSafePublicUrl } from '../../utils/validators.js';
 import {
@@ -198,21 +199,14 @@ export default function registerAiCommands(registry, deps) {
       description: 'List external providers and whether they are configured',
       access: 'owner',
       handler: async (ctx) => {
-        const env = ctx.services.env ?? {};
-        const rows = [
-          ['AI (.ai)', env.AI_API_KEY && env.AI_API_URL],
-          ['Imagine (.imagine)', env.IMAGINE_API_KEY && env.IMAGINE_API_URL],
-          ['Translate (.translate)', true],
-          ['Weather (.weather)', true],
-          ['Currency (.currency)', true],
-          ['Lyrics (.lyrics)', true],
-          ['Short URL (.shorturl)', env.SHORTURL_API_URL || 'is.gd default'],
-          ['Screenshot (.screenshot)', !!env.SCREENSHOT_API_URL],
-          ['Media downloads (.play etc.)', false],
-        ];
+        // Single source of truth: config/providerCatalog.js (same matrix the
+        // --doctor preflight uses, so the two can never disagree).
+        const rows = providerStatus(ctx.services.env ?? {});
         await ctx.reply(
           '*Provider configuration*\n' +
-            rows.map(([k, v]) => `${v ? '✅' : '⬜'} ${k}${v === 'is.gd default' ? ' (keyless default)' : ''}`).join('\n') +
+            rows
+              .map((p) => `${p.configured ? '✅' : '⬜'} ${p.label}` + (p.configured ? '' : ` — ${p.hint}`))
+              .join('\n') +
             '\n\n✅ = available now. ⬜ = set the env var (see .env.example) to enable.',
         );
       },

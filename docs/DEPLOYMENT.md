@@ -2,8 +2,16 @@
 
 Target: a **persistent** server (the bot is a long-running process holding a
 WhatsApp session). The final platform (VPS + PM2/systemd, Docker, or PaaS) is
-an open decision (`docs/REQUIREMENTS.md` §3.9) — this guide covers the VPS path
-and the constraints any target must satisfy.
+an open decision (`docs/REQUIREMENTS.md` §3.9) — this guide covers the VPS and
+container paths and the constraints any target must satisfy. Ready-to-use
+artifacts live in `deploy/`: `xyvera-md.service` (systemd),
+`ecosystem.config.cjs` (PM2), `Dockerfile` + `docker-compose.yml` (containers).
+
+> These artifacts were written against each platform's documented behavior but
+> were **not built or executed in the development sandbox** (no Docker/systemd
+> there). Treat the first run as the test, and report failures honestly.
+> `node src/index.js --doctor` on the host is the fastest way to catch
+> environment problems before blaming the supervisor.
 
 ## Requirements any host must meet
 
@@ -26,6 +34,7 @@ git clone <your-repo> /opt/xyvera-md
 cd /opt/xyvera-md
 npm ci --omit=dev
 cp .env.example .env && nano .env      # set OWNER_NUMBERS etc.
+node src/index.js --doctor             # preflight: fix ❌ items before starting
 
 # 3. First run to pair WhatsApp (QR in terminal over SSH)
 npm start
@@ -33,26 +42,14 @@ npm start
 # Headless alternative: the QR is also written to data/qr.png — copy it off
 # the server (scp) and scan that image with WhatsApp → Linked devices.
 
-# 4. Supervisor — systemd
-sudo tee /etc/systemd/system/xyvera-md.service <<'UNIT'
-[Unit]
-Description=Xyvera MD WhatsApp bot
-After=network-online.target
-
-[Service]
-WorkingDirectory=/opt/xyvera-md
-ExecStart=/usr/bin/node src/index.js
-Restart=always
-RestartSec=5
-EnvironmentFile=/opt/xyvera-md/.env
-# exit code 75 is our "restart requested" signal — still restarts
-User=xyvera
-
-[Install]
-WantedBy=multi-user.target
-UNIT
+# 4. Supervisor — systemd (unit file ships in the repo; edit User/paths)
 sudo useradd -r xyvera && sudo chown -R xyvera /opt/xyvera-md
+sudo cp deploy/xyvera-md.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl enable --now xyvera-md
+
+# 5. Prove the live adapter actually works, then stop the unit briefly
+npm run smoke:live        # observed report → data/live-smoke-report.json
 ```
 
 PM2 alternative: `pm2 start deploy/ecosystem.config.cjs && pm2 save && pm2 startup`.
@@ -72,19 +69,33 @@ PM2 alternative: `pm2 start deploy/ecosystem.config.cjs && pm2 save && pm2 start
 - `.clearsession` (owner-only, confirm-gated) deletes `data/session/` and exits
   75 — after restart you must re-scan the QR.
 
-## Docker (outline)
+## Docker
 
-- Image: `node:22-alpine`, `npm ci --omit=dev`, `CMD ["node","src/index.js"]`.
-- Mount `/app/data` as a volume (session + settings persistence).
-- Pass config with `--env-file .env`.
-- Do **not** bake credentials into the image.
+`deploy/Dockerfile` + `deploy/docker-compose.yml` are provided:
+
+```bash
+cp .env.example .env            # set OWNER_NUMBERS etc.
+docker compose -f deploy/docker-compose.yml up -d
+docker compose -f deploy/docker-compose.yml logs -f   # scan the QR here
+```
+
+- Base image `node:22-slim` (glibc) — chosen deliberately over alpine so the
+  `sharp` media pipeline uses its prebuilt glibc binaries.
+- `data/` (settings + session) and `tmp/` are mounted volumes; without them a
+  container replacement loses the WhatsApp session.
+- `restart: unless-stopped` covers exit code 75 ("restart requested"); the
+  container is single-instance on purpose (the JSON store is single-writer).
+- Config comes from `--env-file .env`; credentials are **never** baked into the
+  image (`.dockerignore` excludes `.env`, `data/`, `tmp/`).
+- Health check: `node src/index.js --doctor --json` inside the container.
 
 ## Upgrades
 
-1. `systemctl stop xyvera-md` (or `pm2 stop`)
+1. `systemctl stop xyvera-md` (or `pm2 stop` / `docker compose stop`)
 2. `git pull && npm ci --omit=dev`
-3. `npm run check` (offline gate)
-4. `systemctl start xyvera-md`
+3. `npm run check` (offline gate: lint + docs sync + 213 tests)
+4. `node src/index.js --doctor` (preflight against your data/session)
+5. `systemctl start xyvera-md`
 
 JSON schema migrations run automatically on load; old files are backed up if
 they cannot be parsed (`.corrupt-<ts>`).

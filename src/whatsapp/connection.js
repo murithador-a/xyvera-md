@@ -97,14 +97,19 @@ export async function connectWhatsApp({ env, logger, onEvent = {}, onNewSocket =
       } catch {
         logger.info?.('QR received — terminal rendering unavailable.');
       }
+      let qrSavedTo = null;
       try {
         const QRCode = (await import('qrcode')).default;
         const qrFile = path.resolve(dataDir, 'qr.png');
         await QRCode.toFile(qrFile, qr, { margin: 1, width: 400 });
+        qrSavedTo = qrFile;
         process.stdout.write(`QR image also saved to ${qrFile} (for headless/remote deploys)\n`);
       } catch {
         /* non-fatal */
       }
+      // Never pass the QR payload itself: it is a live login code. Only the
+      // fact that pairing was requested and where the image was written.
+      onEvent.qr?.({ savedToFile: qrSavedTo });
     }
     if (connection === 'open') {
       attempts = 0;

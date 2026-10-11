@@ -75,16 +75,23 @@ here is a "hidden" failure mode — commands report these limits in-chat too.
 
 ## Test honesty
 
-- 172 automated tests cover business logic, permissions, persistence, the media
-  pipeline (real sharp encodes), and every provider adapter (mocked HTTP) using
-  mocked WhatsApp operations (`tests/helpers/fakeClient.js`). **No live
-  WhatsApp account is used in tests.**
+- 213 automated tests cover business logic, permissions, persistence, the media
+  pipeline (real sharp encodes), every provider adapter (mocked HTTP), the
+  preflight doctor, the live-smoke engine, and the registry ↔ docs sync gate,
+  using mocked WhatsApp operations (`tests/helpers/fakeClient.js`). **No live
+  WhatsApp account is used in tests** — run the suite with `npm test` and check
+  `docs/PHASE-REPORTS.md` for the recorded results.
 - The Baileys adapter (`src/whatsapp/client.js`, `connection.js`, `events.js`)
   is written against the Baileys 7.0.0-rc14 type surface but has **not** been
   exercised against a live WhatsApp account in this phase. Treat live behavior
   (QR pairing, message events, status events, group actions) as *untested until
-  a live smoke test is run* on your machine — `docs/LOCAL_SETUP.md` walks
-  through it. What *is* verified: the process boots cleanly, survives a blocked
-  network with exponential reconnect backoff, re-binds to a fresh socket on
-  reconnect, writes `data/qr.png` for headless pairing, and shuts down
+  `npm run smoke:live` is run* on your machine. The harness reports only what it
+  observed: steps that did not happen are `skipped` or `not-observed`, never
+  `passed`. What *is* verified offline: the process boots cleanly, survives a
+  blocked network with exponential reconnect backoff, re-binds to a fresh socket
+  on reconnect, writes `data/qr.png` for headless pairing, and shuts down
   gracefully on SIGINT/SIGTERM.
+- The deployment artifacts (`deploy/Dockerfile`, `deploy/docker-compose.yml`,
+  `deploy/xyvera-md.service`) were written against their platforms' documented
+  behavior but were **not built or run in the development sandbox** (no Docker /
+  systemd there). Build them on your host and report failures honestly.

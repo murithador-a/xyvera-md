@@ -6,12 +6,7 @@
  * group config never stores numeric meanings.
  */
 
-import {
-  CAPABILITIES,
-  ANTI_LINK_ACTION_LIST,
-  PROPOSED_NUMERIC_ACTION_ALIASES,
-  NUMERIC_ACTION_ALIASES_APPROVED,
-} from '../../config/defaults.js';
+import { CAPABILITIES, ANTI_LINK_ACTION_LIST, NUMERIC_ACTION_ALIASES } from '../../config/defaults.js';
 import { ValidationError } from '../../utils/errors.js';
 import { extractDomain, normalizeJid } from './helpers.js';
 import { ensureGroupConfig, updateGroupConfig, displayJid } from '../common.js';
@@ -48,21 +43,9 @@ export default function registerSecurityCommands(registry, deps) {
             return;
           }
           if (/^\d+$/.test(value)) {
-            if (!NUMERIC_ACTION_ALIASES_APPROVED) {
-              await ctx.reply(
-                [
-                  '⏳ *Numeric action aliases are pending owner approval.*',
-                  '',
-                  'Proposed mapping (not yet in effect):',
-                  '1 → delete   2 → delete-warn   3 → delete-kick   4 → escalate',
-                  '',
-                  'Until approved, use named actions:',
-                  `• ${ANTI_LINK_ACTION_LIST.join('\n• ')}`,
-                ].join('\n'),
-              );
-              return;
-            }
-            const named = PROPOSED_NUMERIC_ACTION_ALIASES[value];
+            // Numeric aliases 1–4 were approved on 2026-10-11 (REQUIREMENTS §2.1)
+            // and are convenience input only: the named value is what gets stored.
+            const named = NUMERIC_ACTION_ALIASES[value];
             if (!named) throw new ValidationError('Unknown numeric alias — valid: 1, 2, 3, 4.');
             setAntiLinkAction(ctx, named);
             return;
@@ -247,7 +230,7 @@ export default function registerSecurityCommands(registry, deps) {
     {
       name: 'antilink-actions',
       category: 'security',
-      description: 'Explain the anti-link action values (incl. pending numeric aliases)',
+      description: 'Explain the anti-link action values (named + numeric aliases 1-4)',
       access: 'everyone',
       handler: async (ctx) => {
         await ctx.reply(actionHelp(ctx));
@@ -267,7 +250,7 @@ function setAntiLinkAction(ctx, action) {
 function actionHelp(ctx) {
   const prefix = ctx.services.config?.prefix ?? '.';
   return [
-    '*Anti-link actions* (named values are final; numbers are aliases):',
+    '*Anti-link actions* (approved; numeric aliases 1–4 are input shortcuts):',
     '• `delete` (1) — delete the violating message',
     '• `delete-warn` (2) — delete + warn (counts toward warning threshold)',
     '• `delete-kick` (3) — delete + remove the sender',

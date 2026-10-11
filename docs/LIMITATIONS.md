@@ -84,4 +84,7 @@ here is a "hidden" failure mode — commands report these limits in-chat too.
   exercised against a live WhatsApp account in this phase. Treat live behavior
   (QR pairing, message events, status events, group actions) as *untested until
   a live smoke test is run* on your machine — `docs/LOCAL_SETUP.md` walks
-  through it.
+  through it. What *is* verified: the process boots cleanly, survives a blocked
+  network with exponential reconnect backoff, re-binds to a fresh socket on
+  reconnect, writes `data/qr.png` for headless pairing, and shuts down
+  gracefully on SIGINT/SIGTERM.

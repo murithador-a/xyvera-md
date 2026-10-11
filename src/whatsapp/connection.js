@@ -26,7 +26,7 @@ export function nextBackoffMs(attempt, rand = Math.random) {
   return Math.round(base * (0.8 + 0.4 * rand()));
 }
 
-export async function connectWhatsApp({ env, logger, onEvent = {}, onNewSocket = null }) {
+export async function connectWhatsApp({ env, logger, onEvent = {}, onNewSocket = null, attempt = 0 }) {
   const baileys = await import('baileys');
   const {
     default: makeWASocket,
@@ -53,21 +53,25 @@ export async function connectWhatsApp({ env, logger, onEvent = {}, onNewSocket =
     });
   }
 
+  // NOTE: self-referential logger — Baileys calls logger.child() DURING
+  // makeWASocket(), so it must not close over `sock` (TDZ crash).
+  const baileysLogger = {
+    level: 'silent',
+    trace: () => {},
+    debug: () => {},
+    info: () => {},
+    warn: (...args) => logger.warn?.('baileys', { detail: String(args?.[0] ?? '') }),
+    error: (...args) => logger.error?.('baileys', { detail: String(args?.[0] ?? '') }),
+    fatal: () => {},
+    child: () => baileysLogger,
+  };
+
   const sock = makeWASocket({
     ...versionCfg,
     auth: state,
     printQRInTerminal: false,
     browser: Browsers.windows('Desktop'),
-    logger: {
-      level: 'silent',
-      trace: () => {},
-      debug: () => {},
-      info: () => {},
-      warn: (...args) => logger.warn?.('baileys', { detail: String(args?.[0] ?? '') }),
-      error: (...args) => logger.error?.('baileys', { detail: String(args?.[0] ?? '') }),
-      fatal: () => {},
-      child: () => sock.config.logger,
-    },
+    logger: baileysLogger,
     // Never mark long-running ops as pending forever
     syncFullHistory: false,
     generateHighQualityLinkPreview: false,
@@ -78,7 +82,7 @@ export async function connectWhatsApp({ env, logger, onEvent = {}, onNewSocket =
   onNewSocket?.(sock);
 
   let botJid = null;
-  let attempts = 0;
+  let attempts = attempt; // carried across the reconnect chain so backoff grows
 
   sock.ev.on('creds.update', saveCreds);
   sock.ev.on('connection.update', async (update) => {
@@ -126,12 +130,12 @@ export async function connectWhatsApp({ env, logger, onEvent = {}, onNewSocket =
       const wait = nextBackoffMs(attempts);
       logger.info?.(`Reconnecting in ${Math.round(wait / 1000)}s (attempt ${attempts})…`);
       const tryReconnect = () => {
-        connectWhatsApp({ env, logger, onEvent, onNewSocket }).catch((err) => {
+        connectWhatsApp({ env, logger, onEvent, onNewSocket, attempt: attempts }).catch((err) => {
           logger.error?.('reconnect attempt failed', { error: String(err?.message ?? err) });
           attempts += 1;
           const retryWait = nextBackoffMs(attempts);
           logger.info?.(`Retrying in ${Math.round(retryWait / 1000)}s (attempt ${attempts})…`);
-          setTimeout(tryReconnect, retryWait);
+          setTimeout(() => tryReconnect(), retryWait);
         });
       };
       setTimeout(tryReconnect, wait);

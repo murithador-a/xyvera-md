@@ -1,0 +1,30 @@
+{
+  "name": "xyvera-md",
+  "version": "0.1.0",
+  "description": "Xyvera MD — modular multi-device WhatsApp bot with owner controls, granular sudo permissions, per-group configuration, security moderation, status automation, games, and utilities.",
+  "type": "module",
+  "main": "src/index.js",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "lint": "node scripts/check-syntax.mjs",
+    "check": "node scripts/check-syntax.mjs && node --test \"tests/**/*.test.js\""
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys",
+    "multi-device",
+    "xyvera"
+  ],
+  "dependencies": {
+    "baileys": "^7.0.0-rc14",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.5"
+  }
+}

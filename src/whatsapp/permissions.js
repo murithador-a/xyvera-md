@@ -27,7 +27,9 @@ export class PermissionService {
 
   /** Owner numbers are normalized to JIDs; empty config = no owner yet. */
   ownerJids() {
-    return (this._settings().ownerNumbers ?? []).map(normalizeJid).filter(Boolean);
+    // Dedupe AFTER normalization: settings may hold both raw digits and JID
+    // forms of the same number (they normalize to the same JID).
+    return [...new Set((this._settings().ownerNumbers ?? []).map(normalizeJid).filter(Boolean))];
   }
 
   isOwner(jid) {

@@ -36,6 +36,19 @@ test('owner detection uses configured numbers only', async () => {
   assert.equal(perms.ownerJids().length, 1);
 });
 
+test('ownerJids dedupes raw digits and JID forms of the same number', async () => {
+  const { perms, settings } = await makePerms();
+  // Settings may accumulate both '234…' and '234…@s.whatsapp.net' forms
+  // (env merge + persisted values) — one human must never show twice.
+  settings.update((s) => ({
+    ...s,
+    ownerNumbers: ['15550000000', '15550000000@s.whatsapp.net', '15550000001@s.whatsapp.net'],
+  }));
+  assert.equal(perms.ownerJids().length, 2);
+  assert.equal(perms.isOwner('15550000000@s.whatsapp.net'), true);
+  assert.equal(perms.isOwner('15550000000'), true);
+});
+
 test('sudo grant/revoke manages granular capabilities', async () => {
   const { perms } = await makePerms();
   perms.grantSudo(ALICE, [CAPABILITIES.GROUP_KICK, CAPABILITIES.GROUP_TAG], { grantedBy: OWNER });

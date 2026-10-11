@@ -55,7 +55,7 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
     prefix: env.BOT_PREFIX,
     mode: env.BOT_MODE,
     ownerName: env.OWNER_NAME,
-    ownerNumbers: env.OWNER_NUMBERS,
+    ownerNumbers: env.OWNER_NUMBERS.map((n) => `${n}@s.whatsapp.net`),
     githubUrl: env.GITHUB_URL,
     projectUrl: env.PROJECT_URL,
   }));
@@ -65,7 +65,10 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
   // a settings UI exists); never guess a number that is not configured.
   store.settings.update((s) => {
     const numbers = env.OWNER_NUMBERS.map((n) => `${n}@s.whatsapp.net`);
-    const merged = [...new Set([...(s.ownerNumbers ?? []), ...numbers])];
+    // Normalize both sides before deduping: stored entries may be raw digits.
+    const merged = [
+      ...new Set([...(s.ownerNumbers ?? []).map((n) => `${String(n).split('@')[0]}@s.whatsapp.net`), ...numbers]),
+    ];
     return { ...s, ownerNumbers: merged, ownerName: env.OWNER_NAME || s.ownerName };
   });
 

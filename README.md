@@ -12,11 +12,15 @@ gated), and a registry-generated menu.
 
 ## Status
 
-Phase 1 complete — foundation, permission system, per-group config, moderation
-logic, games, and utilities are implemented and covered by **132 passing
-tests**. Provider-backed features (AI, downloads, weather…) return setup
-instructions until configured and adapted. See `docs/COMMANDS.md` for the
-per-command truth table and `docs/LIMITATIONS.md` for platform limits.
+**Phase 2 complete** — foundation, permission system, per-group config, moderation
+logic, games, utilities, the local media pipeline (stickers, toimg, blur, memes,
+profile picture, greeting images), persisted reminders, and documented provider
+adapters (AI/imagine via OpenAI-compatible APIs; translate, weather, currency,
+lyrics, short URL, screenshot) are implemented and covered by **172 passing
+tests**. Anti-link numeric aliases 1–4 are approved and active.
+Media *downloads* (`.play` etc.) stay provider-gated until a licensed provider is
+chosen. See `docs/COMMANDS.md` for the per-command truth table and
+`docs/LIMITATIONS.md` for platform limits.
 
 ## Quick start (Windows / local)
 

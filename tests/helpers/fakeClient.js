@@ -139,7 +139,32 @@ export class FakeWhatsAppClient {
 
   async saveMediaFile(msg, name) {
     this._rec('saveMediaFile', name);
-    return { ok: false, reason: 'simulated' };
+    return this.fail.saveMediaFile ? { ok: false, reason: 'simulated' } : { ok: true, path: `/tmp/${name}.bin` };
+  }
+
+  async downloadMedia(msg) {
+    this._rec('downloadMedia', msg);
+    if (this.fail.downloadMedia) return null;
+    return this.mediaBuffer ?? Buffer.from('fake-image-bytes');
+  }
+
+  async sendSticker(jid, webpBuffer) {
+    this._rec('sendSticker', jid);
+    this.sent.push({ jid, text: '[sticker]', opts: { size: webpBuffer?.length ?? 0 } });
+  }
+
+  async sendImageBuffer(jid, buffer, opts = {}) {
+    this._rec('sendImageBuffer', jid);
+    if (this.fail.sendImageBuffer) return { ok: false, reason: 'simulated failure' };
+    this.sent.push({ jid, text: '[image]', opts });
+    return { ok: true };
+  }
+
+  async setProfilePictureFromBuffer(jid, buffer) {
+    this._rec('setProfilePictureFromBuffer', jid);
+    return this.fail.setProfilePictureFromBuffer
+      ? { ok: false, reason: 'simulated refusal' }
+      : { ok: true, size: buffer?.length ?? 0 };
   }
 }
 

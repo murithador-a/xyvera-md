@@ -238,13 +238,17 @@ test('anti-link end-to-end: group config drives enforcement in chat', async () =
   await h.cleanup();
 });
 
-test('numeric anti-link aliases are rejected pending approval', async () => {
+test('numeric anti-link aliases apply the approved mapping', async () => {
   const h = await harnessWith();
   await h.dispatch('.antilink on', { senderJid: ALICE });
   await h.dispatch('.antilink action 3', { senderJid: ALICE });
-  assert.match(h.lastSent().text, /pending owner approval/i);
-  // action unchanged
-  assert.equal(h.app.store.groups.get(h.groupJid).antiLink.action, 'delete');
+  assert.match(h.lastSent().text, /delete-kick/);
+  assert.equal(h.app.store.groups.get(h.groupJid).antiLink.action, 'delete-kick');
+  await h.dispatch('.antilink action 2', { senderJid: ALICE });
+  assert.equal(h.app.store.groups.get(h.groupJid).antiLink.action, 'delete-warn');
+  // invalid numeric alias rejected
+  await h.dispatch('.antilink action 9', { senderJid: ALICE });
+  assert.match(h.lastSent().text, /Unknown numeric alias/i);
   await h.cleanup();
 });
 

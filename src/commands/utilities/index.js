@@ -5,7 +5,7 @@
  * timestamp. Provider-backed utilities live in ../ai (honest "not configured").
  */
 
-import { createHash, randomInt, randomBytes } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import QRCode from 'qrcode';
 
 import { ValidationError } from '../../utils/errors.js';
@@ -173,8 +173,6 @@ export default function registerUtilityCommands(registry, deps) {
         const len = Math.min(Math.max(Number(ctx.args[0]) || 16, 8), 64);
         const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*-_=+';
         const chars = Array.from({ length: len }, () => alphabet[randomInt(alphabet.length)]);
-        // Generate from CSPRNG; one-time display only.
-        void randomBytes;
         await ctx.reply(
           `🔑 Random password (${len} chars):\n\`${chars.join('')}\`\n\n_Shown once — store it somewhere safe. This command never reads saved credentials._`,
         );

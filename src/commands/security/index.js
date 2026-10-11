@@ -1,21 +1,19 @@
 /**
  * Security configuration commands: anti-link, anti-tag, anti-bad-word.
  *
- * Anti-link actions are stored as NAMED values. Numeric aliases (1–4) are
- * PENDING OWNER APPROVAL (docs/REQUIREMENTS.md §2.1) and are rejected with an
- * explanation until approved — no undocumented numeric meaning is assigned.
+ * Anti-link actions are stored as NAMED values. Numeric aliases (1–4) map to
+ * the approved names (docs/REQUIREMENTS.md §2.1) and are only convenience —
+ * group config never stores numeric meanings.
  */
 
 import {
   CAPABILITIES,
   ANTI_LINK_ACTION_LIST,
-  ANTI_LINK_ACTIONS,
   PROPOSED_NUMERIC_ACTION_ALIASES,
   NUMERIC_ACTION_ALIASES_APPROVED,
-  MODERATION_RESPONSES,
 } from '../../config/defaults.js';
 import { ValidationError } from '../../utils/errors.js';
-import { extractDomain, normalizeJid, displayJidSafe } from './helpers.js';
+import { extractDomain, normalizeJid } from './helpers.js';
 import { ensureGroupConfig, updateGroupConfig, displayJid } from '../common.js';
 
 export default function registerSecurityCommands(registry, deps) {
@@ -64,9 +62,8 @@ export default function registerSecurityCommands(registry, deps) {
               );
               return;
             }
-            // Unreachable until NUMERIC_ACTION_ALIASES_APPROVED is explicitly flipped.
             const named = PROPOSED_NUMERIC_ACTION_ALIASES[value];
-            if (!named) throw new ValidationError('Unknown numeric alias.');
+            if (!named) throw new ValidationError('Unknown numeric alias — valid: 1, 2, 3, 4.');
             setAntiLinkAction(ctx, named);
             return;
           }
@@ -264,23 +261,19 @@ function setAntiLinkAction(ctx, action) {
     c.antiLink.action = action;
     return c;
   });
-  void ANTI_LINK_ACTIONS;
   ctx.reply(`✅ Anti-link action set to \`${action}\` for this group.`);
 }
 
 function actionHelp(ctx) {
   const prefix = ctx.services.config?.prefix ?? '.';
   return [
-    '*Anti-link actions* (named values are final; numbers pending approval):',
-    '• `delete` — delete the violating message',
-    '• `delete-warn` — delete + warn (counts toward warning threshold)',
-    '• `delete-kick` — delete + remove the sender',
-    '• `escalate` — delete + warn; remove only when this group configured warning escalation',
+    '*Anti-link actions* (named values are final; numbers are aliases):',
+    '• `delete` (1) — delete the violating message',
+    '• `delete-warn` (2) — delete + warn (counts toward warning threshold)',
+    '• `delete-kick` (3) — delete + remove the sender',
+    '• `escalate` (4) — delete + warn; remove only when this group configured warning escalation',
     '',
-    `Set with: ${prefix}antilink action <name>`,
-    '',
-    '⏳ Numeric aliases are *pending owner approval*. Proposed (NOT in effect):',
-    '1→delete, 2→delete-warn, 3→delete-kick, 4→escalate',
+    `Set with: ${prefix}antilink action <name|1-4>`,
   ].join('\n');
 }
 
@@ -294,5 +287,3 @@ function firstTarget(ctx) {
   }
   throw new ValidationError('Provide a user by mention, reply, or number.');
 }
-
-export { MODERATION_RESPONSES, displayJidSafe };

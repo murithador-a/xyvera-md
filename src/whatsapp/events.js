@@ -9,7 +9,7 @@ import { normalizeJid, displayJid as dj } from './common-min.js';
 import { renderTemplate } from '../utils/templates.js';
 import { defaultGroupConfig } from '../config/defaults.js';
 
-export function attachEventHandlers(sock, { router, moderation, statusAutomation, groupsRepo, warnings, logger, client, getConfig }) {
+export function attachEventHandlers(sock, { router, moderation, statusAutomation, groupsRepo, logger, client }) {
   const botJid = () => normalizeJid(sock.user?.id ? String(sock.user.id).split(':')[0] + '@s.whatsapp.net' : null);
 
   const adminCache = new Map(); // `${group}|${user}` -> { isAdmin, expires }
@@ -118,11 +118,7 @@ export function attachEventHandlers(sock, { router, moderation, statusAutomation
             group: meta.subject ?? 'this group',
           });
           void missing;
-          await client.sendText(chatJid, text, { mentions: [userJid] }).catch(() => {});
-          if (gc.welcome.mediaPath) {
-            // optional media — best effort; not silently claimed on failure
-            logger.debug?.('welcome media path configured; media pipeline pending');
-          }
+          await sendGreeting(client, chatJid, text, [userJid], gc.welcome.mediaPath, logger);
         }
 
         if ((action === 'remove' || action === 'leave') && gc.goodbye?.enabled) {
@@ -132,14 +128,29 @@ export function attachEventHandlers(sock, { router, moderation, statusAutomation
           });
           // NOTE: the event does not reliably distinguish voluntary leave vs
           // removal — the goodbye text must not claim either.
-          await client.sendText(chatJid, text, { mentions: [userJid] }).catch(() => {});
+          await sendGreeting(client, chatJid, text, [userJid], gc.goodbye.mediaPath, logger);
         }
       }
     } catch (err) {
       logger.warn?.('group participants handler error', { error: String(err?.message ?? err) });
     }
   });
+}
 
-  void warnings;
-  void getConfig;
+/** Send a greeting as image-with-caption when media is configured, else plain text. */
+async function sendGreeting(client, chatJid, text, mentions, mediaPath, logger) {
+  try {
+    if (mediaPath) {
+      const { promises: fsp } = await import('node:fs');
+      const buf = await fsp.readFile(mediaPath).catch(() => null);
+      if (buf && client.sendImageBuffer) {
+        const ok = await client.sendImageBuffer(chatJid, buf, { caption: text }).catch(() => null);
+        if (ok?.ok !== false) return;
+      }
+      logger?.warn?.('greeting media could not be sent; falling back to text', { mediaPath });
+    }
+  } catch (err) {
+    logger?.warn?.('greeting media error', { error: String(err?.message ?? err) });
+  }
+  await client.sendText(chatJid, text, { mentions }).catch(() => {});
 }

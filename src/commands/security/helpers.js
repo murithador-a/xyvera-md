@@ -6,8 +6,4 @@ export function extractDomain(input) {
   return _extractDomain(input);
 }
 
-export function displayJidSafe(jid) {
-  return String(jid ?? '').split('@')[0];
-}
-
 export { normalizeJid };

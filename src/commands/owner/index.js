@@ -95,7 +95,7 @@ export default function registerOwnerCommands(registry, deps) {
       description: 'Set the WhatsApp profile about text',
       args: '<text>',
       access: 'owner',
-      status: COMMAND_STATUS.PARTIAL,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
         const text = validateText(ctx.rest, { max: 139, label: 'Bio' });
         const result = await ctx.client.updateProfileStatus?.(text);
@@ -111,7 +111,7 @@ export default function registerOwnerCommands(registry, deps) {
       category: 'owner',
       description: 'Set the bot profile picture (reply to an image)',
       access: 'owner',
-      status: COMMAND_STATUS.PARTIAL,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
         const quoted = ctx.msg.quoted;
         const hasImage = !!quoted?.hasMedia || !!ctx.msg.hasMedia;
@@ -119,7 +119,14 @@ export default function registerOwnerCommands(registry, deps) {
           await ctx.reply('Reply to an image with .setbotpp (or send an image captioned .setbotpp).');
           return;
         }
-        const result = await ctx.client.updateProfilePicture?.(ctx.botJid, quoted ?? ctx.msg);
+        const raw = await ctx.client.downloadMedia(quoted ?? ctx.msg);
+        if (!raw) {
+          await ctx.reply('⚠️ Could not download that image — reply directly to an image message.');
+          return;
+        }
+        const { toProfilePicture } = await import('../../services/mediaPipeline.js');
+        const buf = await toProfilePicture(raw);
+        const result = await ctx.client.setProfilePictureFromBuffer?.(ctx.botJid, buf);
         if (result?.ok === false) {
           await ctx.reply(`⚠️ WhatsApp rejected the profile picture change: ${result.reason ?? 'unsupported'}`);
           return;

@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { promises as fs } from 'node:fs';
 
 import { loadEnv } from './config/env.js';
-import { defaultSettings, defaultGroupConfig, BOT_DEFAULTS, SCHEMA_VERSION } from './config/defaults.js';
+import { defaultSettings, BOT_DEFAULTS, SCHEMA_VERSION } from './config/defaults.js';
 import { createLogger } from './utils/logger.js';
 import { CooldownStore } from './utils/cooldowns.js';
 import { Store } from './storage/jsonStore.js';
@@ -21,10 +21,12 @@ import { WarningService, ModerationService } from './services/moderation.js';
 import { ConfirmationService } from './services/confirmations.js';
 import { StatusAutomationService } from './services/statusAutomation.js';
 import { GameRegistry } from './services/gameEngine.js';
+import { ReminderService } from './services/reminders.js';
+import { createProviders } from './services/providers.js';
 import { renderTemplate } from './utils/templates.js';
 import { CommandRegistry } from './commands/registry.js';
 import { CommandRouter } from './commands/router.js';
-import { normalizeJid, validatePrefix } from './utils/validators.js';
+import { validatePrefix } from './utils/validators.js';
 
 import registerInfoCommands from './commands/info/index.js';
 import registerOwnerCommands from './commands/owner/index.js';
@@ -89,6 +91,17 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
   const statusAutomation = new StatusAutomationService({ statusDoc: store.status, logger });
   const cooldowns = new CooldownStore();
   const gameRegistry = new GameRegistry();
+  const providers = createProviders({ env });
+  const reminders = new ReminderService({
+    doc: store.reminders,
+    sendFn: async (chatJid, userJid, text) => {
+      if (!waClient) return;
+      await waClient.sendText(chatJid, `⏰ Reminder for @${String(userJid).split('@')[0]}: ${text}`, {
+        mentions: [userJid],
+      });
+    },
+    logger,
+  });
 
   const getConfig = () => ({
     ...store.settings.get(),
@@ -100,7 +113,15 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
 
   // ── command registry ─────────────────────────────────────────────────
   const registry = new CommandRegistry();
-  const deps = { getConfig, updateSettings, tmpDir, sessionDir: store.sessionDir, getEnv: () => env, gameRegistry };
+  const deps = {
+    getConfig,
+    updateSettings,
+    tmpDir,
+    sessionDir: store.sessionDir,
+    getEnv: () => env,
+    gameRegistry,
+    getProviders: () => providers,
+  };
   registerInfoCommands(registry, deps);
   registerOwnerCommands(registry, deps);
   registerGroupCommands(registry, deps);
@@ -127,10 +148,13 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
     statusAutomation,
     confirmations,
     gameRegistry,
+    reminders,
+    providers,
     groupsRepo: store.groups,
     renderTemplate,
     config: getConfig(),
     updateSettings,
+    env,
   };
 
   let waClient = null;
@@ -174,7 +198,7 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
   const { attachEventHandlers } = await import('./whatsapp/events.js');
   const { createClientAdapter } = await import('./whatsapp/client.js');
 
-  const { sock, getBotJid } = await connectWhatsApp({
+  const { sock } = await connectWhatsApp({
     env,
     logger,
     onEvent: {
@@ -192,21 +216,18 @@ export async function bootstrap({ rootDir = process.cwd(), connect = true, env: 
     moderation,
     statusAutomation,
     groupsRepo: store.groups,
-    warnings,
     logger,
     client: waClient,
-    getConfig,
   });
 
   // Wire handler services into dispatches (router.dispatch receives services arg)
   const originalDispatch = router.dispatch.bind(router);
   router.dispatch = (msg, client, _svc) => originalDispatch(msg, client, services);
 
+  // Re-arm persisted reminders now that a client is available.
+  reminders.restore();
+
   logger.info?.('Xyvera MD started', { commands: registry.size, mode: permissions.getMode() });
-  void getBotJid;
-  void normalizeJid;
-  void SCHEMA_VERSION;
-  void defaultGroupConfig;
   return app;
 }
 

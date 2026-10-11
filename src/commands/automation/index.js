@@ -7,7 +7,7 @@
 import { CAPABILITIES, COMMAND_STATUS } from '../../config/defaults.js';
 import { ValidationError } from '../../utils/errors.js';
 import { validateText, validateEmoji } from '../../utils/validators.js';
-import { ensureGroupConfig, updateGroupConfig, displayJid } from '../common.js';
+import { ensureGroupConfig, updateGroupConfig } from '../common.js';
 import { renderTemplate, KNOWN_PLACEHOLDERS } from '../../utils/templates.js';
 
 export default function registerAutomationCommands(registry, deps) {
@@ -59,7 +59,7 @@ export default function registerAutomationCommands(registry, deps) {
       access: 'group-admin',
       capability: CAPABILITIES.GROUP_WELCOME,
       groupOnly: true,
-      status: COMMAND_STATUS.PARTIAL,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => setGreetingMedia(ctx, 'welcome'),
     },
     {
@@ -69,7 +69,7 @@ export default function registerAutomationCommands(registry, deps) {
       access: 'group-admin',
       capability: CAPABILITIES.GROUP_WELCOME,
       groupOnly: true,
-      status: COMMAND_STATUS.PARTIAL,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => setGreetingMedia(ctx, 'goodbye'),
     },
     {
@@ -141,7 +141,6 @@ function toggleGreeting(ctx, kind) {
     return c;
   });
   const gc = ensureGroupConfig(ctx.services.groupsRepo, ctx.chatJid);
-  void displayJid;
   ctx.reply(
     `${kind === 'welcome' ? '👋 Welcome' : '👋 Goodbye'} messages *${sub === 'on' ? 'ON' : 'OFF'}* for this group only.\n` +
       `Text: “${gc[kind].text}”`,

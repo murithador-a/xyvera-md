@@ -20,9 +20,6 @@ here is a "hidden" failure mode — commands report these limits in-chat too.
 - **Direct `.add` often fails by design.** WhatsApp privacy settings usually
   force invitations instead; the bot explains this and falls back to the invite
   link workflow.
-- **`.setbotpp` / welcome media.** Profile-picture changes and greeting media
-  need the media pipeline (phase 2). The commands report this instead of
-  pretending success.
 - **Status events.** Statuses arrive as `status@broadcast` messages. Auto-view /
   auto-react work only on statuses the bot actually receives, are rate-limited
   and deduplicated, and delivery/reaction confirmations are never fabricated.
@@ -50,10 +47,17 @@ here is a "hidden" failure mode — commands report these limits in-chat too.
 
 ## External services
 
-- AI, imagine, translate, weather, currency, short URL, screenshot, lyrics, and
-  media downloads require a configured provider in `.env`. Without one, the
-  commands return setup instructions — never a fake success. The provider
-  adapters themselves land in a later phase (see COMMANDS.md statuses).
+- **Implemented now (documented providers):** AI chat + imagine via any
+  OpenAI-compatible endpoint (set `AI_API_URL`/`AI_API_KEY`/`AI_MODEL` and
+  `IMAGINE_API_URL`/`IMAGINE_API_KEY`); translate via MyMemory; weather via
+  Open-Meteo (keyless); currency via Frankfurter/ECB (keyless); lyrics via
+  lyrics.ovh (keyless); short URL via is.gd (keyless, overridable);
+  screenshot via a configurable `{url}` template service (`SCREENSHOT_API_URL`).
+  All are unit-tested with mocked HTTP. Rate limits and terms of each provider
+  still apply — see `src/services/providers.js` for the documented choices.
+- **Not implemented by design:** media downloads (`.play/.song/.video/.tiktok/
+  .instagram`) need a licensed provider decision; until then they return setup
+  guidance, never a fake success.
 - `.shorturl` will never invent a shortened URL; `.screenshot` will always
   block private/internal/local targets (SSRF guard in `utils/validators.js`).
 
@@ -62,7 +66,7 @@ here is a "hidden" failure mode — commands report these limits in-chat too.
 - JSON persistence is per-file with atomic writes and corruption quarantine,
   but it is single-process. Do not run two bot instances against the same
   `data/` directory.
-- `.reminder` is in-memory: reminders do not survive a restart.
+- `.reminder` is persisted (`data/reminders.json`) and re-armed on boot.
 - Warning/escalation kicks require human `.confirm` (safety rail) until the
   group has explicitly configured `warnings.actionOnThreshold = kick`; even
   then, the current implementation asks for confirmation before removing a
@@ -71,7 +75,8 @@ here is a "hidden" failure mode — commands report these limits in-chat too.
 
 ## Test honesty
 
-- 132 automated tests cover business logic, permissions, and persistence using
+- 172 automated tests cover business logic, permissions, persistence, the media
+  pipeline (real sharp encodes), and every provider adapter (mocked HTTP) using
   mocked WhatsApp operations (`tests/helpers/fakeClient.js`). **No live
   WhatsApp account is used in tests.**
 - The Baileys adapter (`src/whatsapp/client.js`, `connection.js`, `events.js`)

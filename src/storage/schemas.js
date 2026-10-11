@@ -78,7 +78,6 @@ export function normalizeSettings(doc) {
 export function validateGroupConfig(doc) {
   const errors = [];
   if (!isPlainObject(doc)) return { ok: false, errors: ['group config must be an object'] };
-  const d = defaultGroupConfig();
   check(typeof doc.welcome === 'object' && typeof doc.welcome.enabled === 'boolean', errors, 'welcome.enabled must be boolean');
   check(typeof doc.goodbye === 'object' && typeof doc.goodbye.enabled === 'boolean', errors, 'goodbye.enabled must be boolean');
   check(typeof doc.antiLink === 'object' && typeof doc.antiLink.enabled === 'boolean', errors, 'antiLink.enabled must be boolean');
@@ -94,7 +93,6 @@ export function validateGroupConfig(doc) {
   if (doc.warnings && doc.warnings.actionOnThreshold !== undefined) {
     check(['none', 'kick'].includes(doc.warnings.actionOnThreshold), errors, 'warnings.actionOnThreshold must be none|kick');
   }
-  void d;
   return { ok: errors.length === 0, errors };
 }
 

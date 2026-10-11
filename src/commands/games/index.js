@@ -29,11 +29,9 @@ import { normalizeJid, displayJid as dj } from '../common.js';
 export default function registerGameCommands(registry, deps) {
   // One shared registry for all game state.
   const games = deps.gameRegistry ?? new GameRegistry();
-  const tictactoe = makeTicTacToeCommands(games);
   const triviaSessions = new Map();
 
   registry.registerAll([
-    ...tictactoe,
     {
       name: 'rps',
       category: 'games',
@@ -271,11 +269,6 @@ export default function registerGameCommands(registry, deps) {
       handler: tictactoeHandler(games),
     },
   ]);
-}
-
-function makeTicTacToeCommands(games) {
-  void games;
-  return []; // ttt registered once below (avoids duplicate names)
 }
 
 function tictactoeHandler(games) {

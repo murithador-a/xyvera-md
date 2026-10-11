@@ -305,6 +305,11 @@ export class Store {
       defaults: () => ({ schemaVersion: SCHEMA_VERSION, autoview: false, autoreact: false, autoreactEmoji: '❤️' }),
       logger,
     });
+    this.reminders = new JsonDocument(path.join(dataDir, 'reminders.json'), {
+      name: 'reminders',
+      defaults: () => ({ schemaVersion: SCHEMA_VERSION, items: [] }),
+      logger,
+    });
     this.sessionDir = path.join(dataDir, 'session');
   }
 
@@ -319,6 +324,7 @@ export class Store {
     await this.groups.load();
     await this.warnings.load();
     await this.status.load();
+    await this.reminders.load();
     return this;
   }
 }

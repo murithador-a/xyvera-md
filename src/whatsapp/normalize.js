@@ -115,6 +115,16 @@ function extractQuoted(raw) {
     hasMedia: ['imageMessage', 'videoMessage', 'stickerMessage', 'documentMessage', 'audioMessage'].some(
       (k) => !!ctxInfo.quotedMessage[k],
     ),
+    // Keep the quoted content so the media pipeline can download it.
+    rawMessage: {
+      key: {
+        remoteJid: raw.key.remoteJid,
+        id: ctxInfo.stanzaId ?? null,
+        fromMe: false,
+        participant: ctxInfo.participant ?? null,
+      },
+      message: ctxInfo.quotedMessage,
+    },
   };
 }
 

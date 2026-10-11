@@ -44,8 +44,9 @@ export const ANTI_LINK_ACTIONS = Object.freeze({
 export const ANTI_LINK_ACTION_LIST = Object.freeze(Object.values(ANTI_LINK_ACTIONS));
 
 /**
- * PROPOSAL ONLY — do not apply. Awaiting owner approval of the mapping table.
- * Numeric input is rejected by the `.antilink action` command until then.
+ * Numeric action aliases — APPROVED mapping (docs/REQUIREMENTS.md §2.1).
+ * These are convenience aliases for the named values below; only named values
+ * are ever stored in group configuration.
  */
 export const PROPOSED_NUMERIC_ACTION_ALIASES = Object.freeze({
   1: ANTI_LINK_ACTIONS.DELETE,
@@ -54,7 +55,7 @@ export const PROPOSED_NUMERIC_ACTION_ALIASES = Object.freeze({
   4: ANTI_LINK_ACTIONS.ESCALATE,
 });
 
-export const NUMERIC_ACTION_ALIASES_APPROVED = false;
+export const NUMERIC_ACTION_ALIASES_APPROVED = true;
 
 /** Responses to anti-tag / anti-bad-word / warning escalation. */
 export const MODERATION_RESPONSES = Object.freeze({

@@ -1,131 +1,176 @@
 /**
- * AI commands. Every provider-backed feature reports "not configured" with
- * the exact env var to set — never a fake success. See docs/REQUIREMENTS.md §1.13
- * and docs/LIMITATIONS.md for provider policy.
+ * AI + provider-backed utilities and media commands.
+ *
+ * Every provider call goes through services/providers.js (documented adapters,
+ * injectable fetch, setup errors when unconfigured — never fake success).
+ * Media commands use the local sharp pipeline (services/mediaPipeline.js).
  */
 
 import { COMMAND_STATUS } from '../../config/defaults.js';
-import { NotConfiguredError } from '../../utils/errors.js';
+import { NotConfiguredError, ExternalServiceError } from '../../utils/errors.js';
+import { isSafePublicUrl } from '../../utils/validators.js';
+import {
+  toStickerWebp,
+  webpToPng,
+  blurImage,
+  memeCaption,
+} from '../../services/mediaPipeline.js';
+
+/** Fetch image/video/sticker bytes for the replied (or current) media message. */
+async function getMedia(ctx) {
+  const target = ctx.msg.quoted ?? ctx.msg;
+  if (!target?.hasMedia && !ctx.msg.quoted) {
+    return null;
+  }
+  return ctx.client.downloadMedia(target);
+}
 
 export default function registerAiCommands(registry, deps) {
-  const { getEnv } = deps;
+  const { getProviders } = deps;
+  const providers = () => getProviders();
 
   registry.registerAll([
     {
       name: 'ai',
       aliases: ['chat', 'ask'],
       category: 'ai',
-      description: 'Talk to an AI assistant (requires AI_API_KEY)',
+      description: 'Talk to an AI assistant (requires AI_API_KEY + AI_API_URL)',
       args: '<prompt>',
       access: 'everyone',
-      status: COMMAND_STATUS.STUB,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.AI_API_KEY || !env.AI_API_URL) {
-          throw new NotConfiguredError('.ai', 'AI_API_KEY (and AI_API_URL)');
-        }
         if (!ctx.rest) {
           await ctx.reply(`Usage: ${ctx.services.config?.prefix ?? '.'}ai <prompt>`);
           return;
         }
-        // Provider adapter call goes here (services/aiProvider.js) once a
-        // provider is selected and documented. Not implemented yet — reported
-        // honestly rather than returning a fabricated answer.
-        await ctx.reply(
-          '🔧 An AI provider is configured, but the provider adapter is not implemented in this phase yet.',
-        );
+        await ctx.reply('🧠 Thinking…');
+        const answer = await providers().chat(ctx.rest, {
+          system: `You are ${ctx.services.config?.botName ?? 'Xyvera MD'}, a helpful WhatsApp assistant. Keep answers concise and chat-friendly.`,
+        });
+        await ctx.reply(answer.slice(0, 4000));
       },
     },
     {
       name: 'imagine',
       category: 'ai',
-      description: 'Generate an image from a prompt (requires IMAGINE_API_KEY)',
+      description: 'Generate an image (requires IMAGINE_API_KEY + IMAGINE_API_URL)',
       args: '<prompt>',
       access: 'everyone',
-      status: COMMAND_STATUS.STUB,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.IMAGINE_API_KEY || !env.IMAGINE_API_URL) {
-          throw new NotConfiguredError('.imagine', 'IMAGINE_API_KEY (and IMAGINE_API_URL)');
+        if (!ctx.rest) {
+          await ctx.reply(`Usage: ${ctx.services.config?.prefix ?? '.'}imagine <prompt>`);
+          return;
         }
-        await ctx.reply('🔧 The image-generation adapter is not implemented in this phase yet.');
+        await ctx.reply('🎨 Generating…');
+        const img = await providers().imagine(ctx.rest);
+        if (img.buffer) {
+          await ctx.client.sendImageBuffer?.(ctx.chatJid, img.buffer, { caption: ctx.rest.slice(0, 100) });
+          return;
+        }
+        await ctx.reply(`🖼️ ${img.url}`);
       },
     },
     {
       name: 'translate',
       category: 'ai',
-      description: 'Translate text (requires TRANSLATE_API_KEY)',
+      description: 'Translate text (MyMemory engine)',
       args: '[lang] <text>',
       access: 'everyone',
-      status: COMMAND_STATUS.STUB,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.TRANSLATE_API_KEY) {
-          throw new NotConfiguredError('.translate', 'TRANSLATE_API_KEY');
+        let to = 'en';
+        let text = ctx.rest;
+        const m = /^([a-z]{2})\s+(.+)$/is.exec(ctx.rest ?? '');
+        if (m) {
+          to = m[1].toLowerCase();
+          text = m[2];
         }
-        await ctx.reply('🔧 The translation adapter is not implemented in this phase yet.');
+        if (!text) {
+          await ctx.reply(`Usage: ${ctx.services.config?.prefix ?? '.'}translate [lang] <text>\nExample: .translate fr hello there`);
+          return;
+        }
+        const res = await providers().translate(text, to);
+        await ctx.reply(`🌐 (${res.engine} → ${to})\n${res.translated}`);
       },
     },
     {
       name: 'weather',
       category: 'utilities',
-      description: 'Weather for a city (requires WEATHER_API_KEY)',
+      description: 'Current weather for a city (Open-Meteo)',
       args: '<city>',
       access: 'everyone',
-      status: COMMAND_STATUS.STUB,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.WEATHER_API_KEY) {
-          throw new NotConfiguredError('.weather', 'WEATHER_API_KEY');
-        }
-        await ctx.reply('🔧 The weather adapter is not implemented in this phase yet.');
+        if (!ctx.rest) throw new ExternalServiceError('Provide a city: .weather Lagos');
+        const w = await providers().weather(ctx.rest);
+        await ctx.reply(
+          [
+            `🌤️ *Weather — ${w.place}*`,
+            `• ${w.description}`,
+            `• Temperature: ${w.tempC}°C (feels like ${w.feelsLikeC}°C)`,
+            `• Humidity: ${w.humidity}%`,
+            `• Wind: ${w.windKmh} km/h`,
+            `_Source: ${w.engine}_`,
+          ].join('\n'),
+        );
       },
     },
     {
       name: 'currency',
       category: 'utilities',
-      description: 'Convert currency (requires CURRENCY_API_KEY)',
+      description: 'Convert currency (Frankfurter/ECB daily rates)',
       args: '<amount> <from> <to>',
       access: 'everyone',
-      status: COMMAND_STATUS.STUB,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.CURRENCY_API_KEY) {
-          throw new NotConfiguredError('.currency', 'CURRENCY_API_KEY');
+        const [amountS, from, to] = ctx.args;
+        const amount = Number(amountS);
+        if (!Number.isFinite(amount) || !from || !to) {
+          await ctx.reply(`Usage: ${ctx.services.config?.prefix ?? '.'}currency <amount> <from> <to>\nExample: .currency 10 USD NGN`);
+          return;
         }
-        await ctx.reply('🔧 The currency adapter is not implemented in this phase yet.');
+        const res = await providers().currency(amount, from, to);
+        await ctx.reply(
+          `💱 ${res.amount} ${res.from} = *${res.converted} ${res.to}*\n_Rate date: ${res.date} (${res.engine})_`,
+        );
       },
     },
     {
       name: 'lyrics',
       category: 'media',
-      description: 'Look up song lyrics (requires LYRICS_API_KEY)',
-      args: '<song - artist>',
+      description: 'Look up song lyrics (lyrics.ovh)',
+      args: '<artist> - <title>',
       access: 'everyone',
-      status: COMMAND_STATUS.STUB,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.LYRICS_API_KEY) {
-          throw new NotConfiguredError('.lyrics', 'LYRICS_API_KEY');
+        const parts = (ctx.rest ?? '').split(' - ');
+        if (parts.length < 2 || !parts[0].trim() || !parts[1].trim()) {
+          await ctx.reply(`Usage: ${ctx.services.config?.prefix ?? '.'}lyrics <artist> - <title>`);
+          return;
         }
-        await ctx.reply('🔧 The lyrics adapter is not implemented in this phase yet.');
+        const text = await providers().lyrics(parts[0].trim(), parts.slice(1).join(' - ').trim());
+        // WhatsApp messages cap at ~4096 chars; send the tail as a follow-up if needed
+        const chunks = text.match(/[\s\S]{1,3800}/g) ?? [text];
+        for (const chunk of chunks.slice(0, 3)) await ctx.reply(`🎵\n${chunk}`);
       },
     },
     {
       name: 'shorturl',
       category: 'utilities',
-      description: 'Shorten a URL via your configured provider',
+      description: 'Shorten a public URL via the configured provider (is.gd by default)',
       args: '<url>',
       access: 'everyone',
-      status: COMMAND_STATUS.STUB,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.SHORTURL_API_URL) {
-          throw new NotConfiguredError('.shorturl', 'SHORTURL_API_URL');
+        const url = (ctx.rest ?? '').trim();
+        const check = isSafePublicUrl(url);
+        if (!check.ok) {
+          await ctx.reply(`⚠️ ${check.reason}`);
+          return;
         }
-        await ctx.reply(
-          '🔧 Short URL provider adapter is not implemented in this phase yet.\n(no shortened URL is ever invented)',
-        );
+        const short = await providers().shorten(url);
+        await ctx.reply(`🔗 ${short}`);
       },
     },
     {
@@ -134,170 +179,17 @@ export default function registerAiCommands(registry, deps) {
       description: 'Screenshot a public web page (requires SCREENSHOT_API_URL)',
       args: '<url>',
       access: 'everyone',
-      status: COMMAND_STATUS.STUB,
+      status: COMMAND_STATUS.IMPLEMENTED,
       handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.SCREENSHOT_API_URL) {
-          throw new NotConfiguredError('.screenshot', 'SCREENSHOT_API_URL');
-        }
-        await ctx.reply(
-          '🔧 The screenshot adapter is not implemented in this phase yet.\n(private IPs and local addresses will always be blocked)',
-        );
-      },
-    },
-    {
-      name: 'play',
-      category: 'media',
-      description: 'Find/play a song (requires MEDIA_API_URL)',
-      args: '<query>',
-      access: 'everyone',
-      status: COMMAND_STATUS.STUB,
-      handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.MEDIA_API_URL) {
-          throw new NotConfiguredError('.play', 'MEDIA_API_URL');
-        }
-        await ctx.reply('🔧 The media-download adapter is not implemented in this phase yet.');
-      },
-    },
-    {
-      name: 'song',
-      category: 'media',
-      description: 'Download audio for a query (requires MEDIA_API_URL)',
-      args: '<query>',
-      access: 'everyone',
-      status: COMMAND_STATUS.STUB,
-      handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.MEDIA_API_URL) {
-          throw new NotConfiguredError('.song', 'MEDIA_API_URL');
-        }
-        await ctx.reply('🔧 The media-download adapter is not implemented in this phase yet.');
-      },
-    },
-    {
-      name: 'video',
-      category: 'media',
-      description: 'Download video for a query (requires MEDIA_API_URL)',
-      args: '<query>',
-      access: 'everyone',
-      status: COMMAND_STATUS.STUB,
-      handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.MEDIA_API_URL) {
-          throw new NotConfiguredError('.video', 'MEDIA_API_URL');
-        }
-        await ctx.reply('🔧 The media-download adapter is not implemented in this phase yet.');
-      },
-    },
-    {
-      name: 'tiktok',
-      category: 'media',
-      description: 'Download a TikTok link (requires MEDIA_API_URL)',
-      args: '<url>',
-      access: 'everyone',
-      status: COMMAND_STATUS.STUB,
-      handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.MEDIA_API_URL) {
-          throw new NotConfiguredError('.tiktok', 'MEDIA_API_URL');
-        }
-        await ctx.reply('🔧 The media-download adapter is not implemented in this phase yet.');
-      },
-    },
-    {
-      name: 'instagram',
-      category: 'media',
-      description: 'Download an Instagram link (requires MEDIA_API_URL)',
-      args: '<url>',
-      access: 'everyone',
-      status: COMMAND_STATUS.STUB,
-      handler: async (ctx) => {
-        const env = getEnv();
-        if (!env.MEDIA_API_URL) {
-          throw new NotConfiguredError('.instagram', 'MEDIA_API_URL');
-        }
-        await ctx.reply('🔧 The media-download adapter is not implemented in this phase yet.');
-      },
-    },
-    {
-      name: 'sticker',
-      aliases: ['s'],
-      category: 'media',
-      description: 'Turn an image into a sticker',
-      access: 'everyone',
-      status: COMMAND_STATUS.PARTIAL,
-      handler: async (ctx) => {
-        const hasMedia = !!ctx.msg.quoted?.hasMedia || !!ctx.msg.hasMedia;
-        if (!hasMedia) {
-          await ctx.reply(`Reply to an image with ${ctx.services.config?.prefix ?? '.'}sticker`);
+        const url = (ctx.rest ?? '').trim();
+        const check = isSafePublicUrl(url);
+        if (!check.ok) {
+          await ctx.reply(`⚠️ ${check.reason}`);
           return;
         }
-        await ctx.reply(
-          '🔧 Sticker conversion (image → webp) needs the local media pipeline, which is not enabled in this phase yet.',
-        );
-      },
-    },
-    {
-      name: 'toimg',
-      category: 'media',
-      description: 'Convert a sticker back to an image',
-      access: 'everyone',
-      status: COMMAND_STATUS.PARTIAL,
-      handler: async (ctx) => {
-        const hasMedia = !!ctx.msg.quoted?.hasMedia || !!ctx.msg.hasMedia;
-        if (!hasMedia) {
-          await ctx.reply(`Reply to a sticker with ${ctx.services.config?.prefix ?? '.'}toimg`);
-          return;
-        }
-        await ctx.reply('🔧 Sticker → image conversion needs the local media pipeline, not enabled in this phase yet.');
-      },
-    },
-    {
-      name: 'blur',
-      category: 'media',
-      description: 'Blur an image',
-      access: 'everyone',
-      status: COMMAND_STATUS.PARTIAL,
-      handler: async (ctx) => {
-        await ctx.reply('🔧 Image processing pipeline not enabled in this phase yet.');
-      },
-    },
-    {
-      name: 'meme',
-      category: 'media',
-      description: 'Caption an image as a meme',
-      args: '<top text> | <bottom text>',
-      access: 'everyone',
-      status: COMMAND_STATUS.PARTIAL,
-      handler: async (ctx) => {
-        await ctx.reply('🔧 Meme rendering needs the local media pipeline, not enabled in this phase yet.');
-      },
-    },
-    {
-      name: 'reminder',
-      category: 'utilities',
-      description: 'Set a reminder (in-memory; lost on restart)',
-      args: '<time> <text>',
-      access: 'everyone',
-      status: COMMAND_STATUS.PARTIAL,
-      handler: async (ctx) => {
-        const m = /^(\d+)(s|m|h)\s+(.+)$/i.exec(ctx.rest ?? '');
-        if (!m) {
-          await ctx.reply(`Usage: ${ctx.services.config?.prefix ?? '.'}reminder <time> <text>\nExample: .reminder 10m check the oven`);
-          return;
-        }
-        const mult = { s: 1000, m: 60000, h: 3600000 }[m[2].toLowerCase()];
-        const delayMs = Math.min(Number(m[1]) * mult, 24 * 3600000);
-        const text = m[3];
-        await ctx.reply(`⏰ Reminder set for ${m[1]}${m[2]} from now.\nNote: reminders are in-memory — they do not survive a restart.`);
-        setTimeout(() => {
-          ctx.client
-            .sendText(ctx.chatJid, `⏰ Reminder for @${String(ctx.senderJid).split('@')[0]}: ${text}`, {
-              mentions: [ctx.senderJid],
-            })
-            .catch(() => {});
-        }, delayMs);
+        const buf = await providers().screenshot(url);
+        const ok = await ctx.client.sendImageBuffer?.(ctx.chatJid, buf, { caption: `📷 ${url}` });
+        if (!ok?.ok) await ctx.reply('⚠️ Could not send the screenshot image in this environment.');
       },
     },
     {
@@ -306,24 +198,168 @@ export default function registerAiCommands(registry, deps) {
       description: 'List external providers and whether they are configured',
       access: 'owner',
       handler: async (ctx) => {
-        const env = getEnv();
+        const env = ctx.services.env ?? {};
         const rows = [
-          ['AI', env.AI_API_KEY && env.AI_API_URL],
-          ['Imagine', env.IMAGINE_API_KEY && env.IMAGINE_API_URL],
-          ['Translate', env.TRANSLATE_API_KEY],
-          ['Weather', env.WEATHER_API_KEY],
-          ['Currency', env.CURRENCY_API_KEY],
-          ['Short URL', env.SHORTURL_API_URL],
-          ['Screenshot', env.SCREENSHOT_API_URL],
-          ['Lyrics', env.LYRICS_API_KEY],
-          ['Media download', env.MEDIA_API_URL],
+          ['AI (.ai)', env.AI_API_KEY && env.AI_API_URL],
+          ['Imagine (.imagine)', env.IMAGINE_API_KEY && env.IMAGINE_API_URL],
+          ['Translate (.translate)', true],
+          ['Weather (.weather)', true],
+          ['Currency (.currency)', true],
+          ['Lyrics (.lyrics)', true],
+          ['Short URL (.shorturl)', env.SHORTURL_API_URL || 'is.gd default'],
+          ['Screenshot (.screenshot)', !!env.SCREENSHOT_API_URL],
+          ['Media downloads (.play etc.)', false],
         ];
         await ctx.reply(
-          '*External provider configuration*\n' +
-            rows.map(([k, v]) => `${v ? '✅' : '⬜'} ${k}`).join('\n') +
-            '\n\nConfigured = the env vars are set. Adapters may still be pending (see .commands).',
+          '*Provider configuration*\n' +
+            rows.map(([k, v]) => `${v ? '✅' : '⬜'} ${k}${v === 'is.gd default' ? ' (keyless default)' : ''}`).join('\n') +
+            '\n\n✅ = available now. ⬜ = set the env var (see .env.example) to enable.',
         );
+      },
+    },
+
+    // ── media pipeline (local sharp) ────────────────────────────────────
+    {
+      name: 'sticker',
+      aliases: ['s'],
+      category: 'media',
+      description: 'Turn a replied image into a sticker',
+      access: 'everyone',
+      status: COMMAND_STATUS.IMPLEMENTED,
+      handler: async (ctx) => {
+        const buf = await getMedia(ctx);
+        if (!buf) {
+          await ctx.reply(`Reply to an image with ${ctx.services.config?.prefix ?? '.'}sticker`);
+          return;
+        }
+        const webp = await toStickerWebp(buf);
+        await ctx.client.sendSticker?.(ctx.chatJid, webp);
+      },
+    },
+    {
+      name: 'toimg',
+      category: 'media',
+      description: 'Convert a replied sticker back to an image',
+      access: 'everyone',
+      status: COMMAND_STATUS.IMPLEMENTED,
+      handler: async (ctx) => {
+        const buf = await getMedia(ctx);
+        if (!buf) {
+          await ctx.reply(`Reply to a sticker with ${ctx.services.config?.prefix ?? '.'}toimg`);
+          return;
+        }
+        const png = await webpToPng(buf);
+        await ctx.client.sendImageBuffer?.(ctx.chatJid, png, { caption: '🖼️ sticker → image' });
+      },
+    },
+    {
+      name: 'blur',
+      category: 'media',
+      description: 'Blur a replied image (optional radius 1-100)',
+      args: '[radius]',
+      access: 'everyone',
+      status: COMMAND_STATUS.IMPLEMENTED,
+      handler: async (ctx) => {
+        const buf = await getMedia(ctx);
+        if (!buf) {
+          await ctx.reply(`Reply to an image with ${ctx.services.config?.prefix ?? '.'}blur [radius]`);
+          return;
+        }
+        const out = await blurImage(buf, Number(ctx.args[0]) || 5);
+        await ctx.client.sendImageBuffer?.(ctx.chatJid, out, { caption: '🌫️ blurred' });
+      },
+    },
+    {
+      name: 'meme',
+      category: 'media',
+      description: 'Caption a replied image: <top> | <bottom>',
+      args: '<top> | <bottom>',
+      access: 'everyone',
+      status: COMMAND_STATUS.IMPLEMENTED,
+      handler: async (ctx) => {
+        const buf = await getMedia(ctx);
+        if (!buf) {
+          await ctx.reply(`Reply to an image with ${ctx.services.config?.prefix ?? '.'}meme <top> | <bottom>`);
+          return;
+        }
+        const parts = (ctx.rest ?? '').split('|').map((s) => s.trim());
+        const out = await memeCaption(buf, { top: parts[0] ?? '', bottom: parts[1] ?? '' });
+        await ctx.client.sendImageBuffer?.(ctx.chatJid, out, { caption: '😎 meme' });
+      },
+    },
+
+    // ── media downloads: no legitimate universal provider ───────────────
+    ...['play', 'song', 'video', 'tiktok', 'instagram'].map((name) => ({
+      name,
+      category: 'media',
+      description: `Download media via a licensed provider (${name})`,
+      args: '<query|url>',
+      access: 'everyone',
+      status: COMMAND_STATUS.STUB,
+      handler: async (ctx) => {
+        await ctx.reply(
+          `🔧 *${name}* needs a licensed media provider (API key + terms that permit downloading).\n` +
+            'No reliable legitimate provider is configured, so this command will not pretend to work.\n' +
+            'Set MEDIA_API_URL/MEDIA_API_KEY once a provider is chosen (docs/REQUIREMENTS.md §3.8).',
+        );
+      },
+    })),
+    {
+      name: 'reminder',
+      category: 'utilities',
+      description: 'Set a reminder (persisted across restarts)',
+      args: '<time> <text>',
+      access: 'everyone',
+      status: COMMAND_STATUS.IMPLEMENTED,
+      handler: async (ctx) => {
+        const m = /^(\d+)(s|m|h)\s+(.+)$/i.exec(ctx.rest ?? '');
+        if (!m) {
+          await ctx.reply(`Usage: ${ctx.services.config?.prefix ?? '.'}reminder <time> <text>\nExample: .reminder 10m check the oven`);
+          return;
+        }
+        const mult = { s: 1000, m: 60_000, h: 3_600_000 }[m[2].toLowerCase()];
+        const delayMs = Math.min(Number(m[1]) * mult, 24 * 3_600_000);
+        await ctx.services.reminders.add({
+          chatJid: ctx.chatJid,
+          userJid: ctx.senderJid,
+          text: m[3],
+          fireAt: Date.now() + delayMs,
+        });
+        await ctx.reply(`⏰ Reminder set for ${m[1]}${m[2]} from now — it survives restarts.`);
+      },
+    },
+    {
+      name: 'reminders',
+      category: 'utilities',
+      description: 'List your pending reminders',
+      access: 'everyone',
+      handler: async (ctx) => {
+        const list = ctx.services.reminders.listFor(ctx.chatJid, ctx.senderJid);
+        if (list.length === 0) {
+          await ctx.reply('You have no pending reminders in this chat.');
+          return;
+        }
+        await ctx.reply(
+          '⏰ *Your reminders here:*\n' +
+            list
+              .map((r) => `• in ${Math.max(0, Math.round((r.fireAt - Date.now()) / 60_000))}m — ${r.text}`)
+              .join('\n'),
+        );
+      },
+    },
+    {
+      name: 'delreminder',
+      category: 'utilities',
+      description: 'Cancel one of your pending reminders by number',
+      args: '<number>',
+      access: 'everyone',
+      handler: async (ctx) => {
+        const idx = Number(ctx.args[0]) - 1;
+        const ok = ctx.services.reminders.cancelAt(ctx.chatJid, ctx.senderJid, idx);
+        await ctx.reply(ok ? '✅ Reminder cancelled.' : 'No reminder at that number (see .reminders).');
       },
     },
   ]);
 }
+
+export { getMedia };

@@ -23,6 +23,9 @@
  *   saveMediaFile(msg, name)                                -> { ok, path?, reason? }
  */
 
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+
 import { WhatsAppActionError } from '../utils/errors.js';
 import { normalizeJid } from '../utils/validators.js';
 
@@ -141,10 +144,17 @@ export function createClientAdapter(sock, { logger = null, tmpDir = null } = {})
     leaveGroup: (groupJid) => okWrap(() => sock.groupLeave(groupJid), 'leaveGroup'),
 
     updateProfileStatus: (text) => okWrap(() => sock.updateProfileStatus(text), 'updateProfileStatus'),
-    updateProfilePicture: (jid, _mediaMsg) =>
-      okWrap(async () => {
-        throw new Error('requires media download + upload pipeline (phase 2)');
-      }, 'updateProfilePicture'),
+    updateProfilePicture: (jid, mediaMsg) =>
+      (async () => {
+        try {
+          const buf = Buffer.isBuffer(mediaMsg) ? mediaMsg : await downloadMessageMedia(sock, mediaMsg);
+          if (!buf) return { ok: false, reason: 'no media found on that message' };
+          await sock.updateProfilePicture(jid, buf);
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, reason: String(err?.message ?? err) };
+        }
+      })(),
 
     markStatusRead: async (statusEv) => {
       if (statusEv?.key) await sock.readMessages([statusEv.key]);
@@ -157,14 +167,51 @@ export function createClientAdapter(sock, { logger = null, tmpDir = null } = {})
       });
     },
 
-    saveMediaFile: async (_msg, _name) => ({
-      ok: false,
-      reason: 'media storage pipeline not enabled in this phase',
-    }),
+    saveMediaFile: async (msg, name) => {
+      try {
+        const buf = await downloadMessageMedia(sock, msg);
+        if (!buf) return { ok: false, reason: 'no downloadable media on that message' };
+        const mediaDir = path.resolve(tmpDir ?? 'data', 'media');
+        await fs.mkdir(mediaDir, { recursive: true });
+        const file = path.join(mediaDir, `${sanitizeName(name)}-${Date.now()}.bin`);
+        await fs.writeFile(file, buf);
+        return { ok: true, path: file, size: buf.length };
+      } catch (err) {
+        return { ok: false, reason: String(err?.message ?? err) };
+      }
+    },
+
+    /** Download media bytes from a normalized message or its quoted reply. */
+    downloadMedia: async (msg) => downloadMessageMedia(sock, msg),
+
+    /** Set a profile picture from raw image bytes (media pipeline output). */
+    setProfilePictureFromBuffer: async (jid, buffer) =>
+      okWrap(() => sock.updateProfilePicture(jid, buffer), 'updateProfilePicture'),
 
     // helper used by events.js
     sendMediaFromMessage: async (jid, content, opts) => sock.sendMessage(jid, content, opts),
+    sendSticker: (jid, webpBuffer) =>
+      wrap(async () => {
+        await sock.sendMessage(jid, { sticker: webpBuffer });
+      }, 'sendSticker'),
+    sendImageBuffer: async (jid, buffer, { caption = '' } = {}) =>
+      okWrap(() => sock.sendMessage(jid, { image: buffer, caption }), 'sendImageBuffer'),
   };
+}
+
+function sanitizeName(name) {
+  return String(name ?? 'media').replace(/[^\w.-]/g, '_').slice(0, 60);
+}
+
+/** Download media from a normalized ctx (msg.raw) or quoted (msg.rawMessage). */
+async function downloadMessageMedia(sock, msg) {
+  const baileys = await import('baileys');
+  const target = msg?.raw ?? msg?.rawMessage ?? msg;
+  if (!target?.message) throw new WhatsAppActionError('No media message found (reply to an image/video/sticker).');
+  return baileys.downloadMediaMessage(target, 'buffer', {}, {
+    logger: { level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, fatal: () => {}, child: () => ({}) },
+    reuploadRequest: sock.updateMediaMessage,
+  });
 }
 
 async function participantAction(sock, groupJid, userJid, action, logger) {

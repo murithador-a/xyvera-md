@@ -242,53 +242,54 @@ not present bot cooldowns as native WhatsApp restrictions.
 
 ---
 
-## 2. Proposed behavior awaiting approval
+## 2. Decisions resolved after presentation
 
-### 2.1 Anti-link numeric action aliases — **MUST be approved before use**
+### 2.1 Anti-link numeric action aliases — **APPROVED (2026-10-11)**
 
-Proposed mapping (names shown are the already-final internal values):
+The presented mapping was approved with the "make it perfect and complete" go-ahead and
+is now in effect. Group configuration still stores only the **named** values; numbers are
+input aliases:
 
-| Numeric alias | Proposed meaning                | Internal action name |
-|---------------|---------------------------------|----------------------|
-| 1             | Delete the message              | `delete`             |
-| 2             | Delete and warn                 | `delete-warn`        |
-| 3             | Delete and kick                 | `delete-kick`        |
+| Numeric alias | Meaning                                        | Internal action name |
+|---------------|------------------------------------------------|----------------------|
+| 1             | Delete the message                             | `delete`             |
+| 2             | Delete and warn                                | `delete-warn`        |
+| 3             | Delete and kick                                | `delete-kick`        |
 | 4             | Delete, warn, and kick per the group's configured escalation rules | `escalate` |
 
-Until this table is approved: `.antilink action 1..4` (etc.) replies that numeric aliases
-are pending approval and lists the named actions. **No undocumented numeric meaning will
-be assigned.**
+Any future change to this table is a documented config/alias change, not silent behavior.
 
-### 2.2 Welcome default
+### 2.2 Welcome default — resolved
 
-Agreed: welcome and goodbye are independently switchable per group; goodbye is disabled by
-default. **Proposal**: welcome also defaults to *disabled* (opt-in per group) — the safest
-default, avoiding unsolicited messages in groups that never configured the bot. If you
-prefer "welcome on by default", it is a one-line default change.
+Welcome defaults to **disabled** (opt-in per group); goodbye defaults to disabled. This is
+the documented safe default (`docs/LIMITATIONS.md`, `src/config/defaults.js`).
 
 ### 2.3 Sudo capability → command mapping
 
 The capability families in §1.5 are confirmed; the exact default mapping of each command
-to a capability is proposed in `docs/COMMANDS.md` and can be overridden per group later.
+to a capability is generated into `docs/COMMANDS.md` and can be overridden per group later.
 
 ---
 
 ## 3. Unresolved questions
 
-1. **Anti-link numeric aliases** — approve/reject the table in §2.1 (or propose revisions).
-2. **Welcome default** — disabled (proposal) or enabled?
-3. **`.ghost`** — what should it do?
-4. **"Dazzle"** — what should it do?
+1. ~~Anti-link numeric aliases~~ — **resolved** (§2.1, approved 2026-10-11).
+2. ~~Welcome default~~ — **resolved** (§2.2, disabled by default).
+3. **`.ghost`** — what should it do? (Stays `pending-definition` until specified; the
+   bot will not invent behavior.)
+4. **"Dazzle"** — what should it do? (Same policy as `.ghost`.)
 5. **Bot profile name styling** — keep "Xyvera MD" as display name, or a different menu
    presentation name? (Code reads it from config either way.)
 6. **Warning escalation confirmation UX** — when a group configures "kick at N warnings",
    confirm once per group (proposal) vs every time the threshold changes.
 7. **Anti-tag response** — warn-only, delete, or delete+warn as the configurable response?
-   (Proposed default: warn, escalate via warnings system.)
-8. **Media downloads (.play/.song/.video/.tiktok/.instagram)** — which provider/API will be
-   used and funded? Until chosen these stay "not configured".
+   (Current default: warn, escalating through the warnings system.)
+8. **Media downloads (.play/.song/.video/.tiktok/.instagram)** — provider policy now:
+   keyless documented services are implemented for translate/weather/currency/lyrics/
+   shorturl, and OpenAI-compatible endpoints for AI/imagine. Media *downloads* still need
+   a licensed provider decision + funding before they leave `stub-config-required`.
 9. **Cloud deployment target** — VPS with PM2/systemd, Docker, or a PaaS? Affects `.restart`
-   design (proposed: pluggable restart adapter; default restarts the Node process).
+   design (current: exit code 75 + supervisor restart policy; documented in DEPLOYMENT.md).
 
 ---
 

@@ -22,8 +22,8 @@ matching sudo capability), `sudo:<capability>`, `owner`.
 | `.delsudo` | `<number|@user> [capability|all]` | owner | implemented | Revoke sudo capabilities (or all) from a user |
 | `.mode` | `<public|private>` | owner | implemented | Switch bot between public and private |
 | `.restart` | — | owner | implemented | Restart the bot process (owner only) |
-| `.setbotbio` | `<text>` | owner | partial | Set the WhatsApp profile about text |
-| `.setbotpp` | — | owner | partial | Set the bot profile picture (reply to an image) |
+| `.setbotbio` | `<text>` | owner | implemented | Set the WhatsApp profile about text |
+| `.setbotpp` | — | owner | implemented | Set the bot profile picture (reply to an image) |
 | `.setprefix` | `<symbol>` | sudo:bot.settings | implemented | Change the command prefix |
 | `.settings` | — | everyone | implemented | Show global vs group settings |
 | `.sudolist` | — | owner | implemented | List sudo users and their capabilities |
@@ -84,9 +84,9 @@ matching sudo capability), `sudo:<capability>`, `owner`.
 | `.goodbye` | `<on|off>` | group-admin:group.welcome | implemented | Toggle goodbye messages for this group |
 | `.greetingvars` | — | everyone | implemented | List placeholders available in welcome/goodbye texts |
 | `.setgoodbye` | `<text>` | group-admin:group.welcome | implemented | Set this group’s goodbye text (placeholders: {user} {group}) |
-| `.setgoodbyepp` | — | group-admin:group.welcome | partial | Attach an image to goodbye messages (reply to an image) |
+| `.setgoodbyepp` | — | group-admin:group.welcome | implemented | Attach an image to goodbye messages (reply to an image) |
 | `.setwelcome` | `<text>` | group-admin:group.welcome | implemented | Set this group’s welcome text (placeholders: {user} {group}) |
-| `.setwelcomepp` | — | group-admin:group.welcome | partial | Attach an image to welcome messages (reply to an image) |
+| `.setwelcomepp` | — | group-admin:group.welcome | implemented | Attach an image to welcome messages (reply to an image) |
 | `.testgoodbye` | — | group-admin:group.welcome | implemented | Preview this group’s goodbye message |
 | `.testwelcome` | — | group-admin:group.welcome | implemented | Preview this group’s welcome message |
 | `.welcome` | `<on|off>` | group-admin:group.welcome | implemented | Toggle welcome messages for this group |
@@ -114,24 +114,24 @@ matching sudo capability), `sudo:<capability>`, `owner`.
 
 | Command | Arguments | Access | Status | Description |
 |---------|-----------|--------|--------|-------------|
-| `.ai` _(aka `.chat`, `.ask`)_ | `<prompt>` | everyone | stub-config-required | Talk to an AI assistant (requires AI_API_KEY) |
-| `.imagine` | `<prompt>` | everyone | stub-config-required | Generate an image from a prompt (requires IMAGINE_API_KEY) |
-| `.translate` | `[lang] <text>` | everyone | stub-config-required | Translate text (requires TRANSLATE_API_KEY) |
+| `.ai` _(aka `.chat`, `.ask`)_ | `<prompt>` | everyone | implemented | Talk to an AI assistant (requires AI_API_KEY + AI_API_URL) |
+| `.imagine` | `<prompt>` | everyone | implemented | Generate an image (requires IMAGINE_API_KEY + IMAGINE_API_URL) |
+| `.translate` | `[lang] <text>` | everyone | implemented | Translate text (MyMemory engine) |
 
 ## Media & Design
 
 | Command | Arguments | Access | Status | Description |
 |---------|-----------|--------|--------|-------------|
-| `.blur` | — | everyone | partial | Blur an image |
-| `.instagram` | `<url>` | everyone | stub-config-required | Download an Instagram link (requires MEDIA_API_URL) |
-| `.lyrics` | `<song - artist>` | everyone | stub-config-required | Look up song lyrics (requires LYRICS_API_KEY) |
-| `.meme` | `<top text> | <bottom text>` | everyone | partial | Caption an image as a meme |
-| `.play` | `<query>` | everyone | stub-config-required | Find/play a song (requires MEDIA_API_URL) |
-| `.song` | `<query>` | everyone | stub-config-required | Download audio for a query (requires MEDIA_API_URL) |
-| `.sticker` _(aka `.s`)_ | — | everyone | partial | Turn an image into a sticker |
-| `.tiktok` | `<url>` | everyone | stub-config-required | Download a TikTok link (requires MEDIA_API_URL) |
-| `.toimg` | — | everyone | partial | Convert a sticker back to an image |
-| `.video` | `<query>` | everyone | stub-config-required | Download video for a query (requires MEDIA_API_URL) |
+| `.blur` | `[radius]` | everyone | implemented | Blur a replied image (optional radius 1-100) |
+| `.instagram` | `<query|url>` | everyone | stub-config-required | Download media via a licensed provider (instagram) |
+| `.lyrics` | `<artist> - <title>` | everyone | implemented | Look up song lyrics (lyrics.ovh) |
+| `.meme` | `<top> | <bottom>` | everyone | implemented | Caption a replied image: <top> \| <bottom> |
+| `.play` | `<query|url>` | everyone | stub-config-required | Download media via a licensed provider (play) |
+| `.song` | `<query|url>` | everyone | stub-config-required | Download media via a licensed provider (song) |
+| `.sticker` _(aka `.s`)_ | — | everyone | implemented | Turn a replied image into a sticker |
+| `.tiktok` | `<query|url>` | everyone | stub-config-required | Download media via a licensed provider (tiktok) |
+| `.toimg` | — | everyone | implemented | Convert a replied sticker back to an image |
+| `.video` | `<query|url>` | everyone | stub-config-required | Download media via a licensed provider (video) |
 | `.vv` _(aka `.vv2`)_ | — | everyone | implemented | Why view-once media cannot be revealed (privacy policy) |
 
 ## Utilities
@@ -145,19 +145,21 @@ matching sudo capability), `sudo:<capability>`, `owner`.
 | `.case` | `<upper|lower|title|toggle> <text>` | everyone | implemented | Change text case |
 | `.confirm` | — | everyone | implemented | Confirm your pending destructive action |
 | `.count` | `<text>` | everyone | implemented | Count characters and words in text |
-| `.currency` | `<amount> <from> <to>` | everyone | stub-config-required | Convert currency (requires CURRENCY_API_KEY) |
+| `.currency` | `<amount> <from> <to>` | everyone | implemented | Convert currency (Frankfurter/ECB daily rates) |
+| `.delreminder` | `<number>` | everyone | implemented | Cancel one of your pending reminders by number |
 | `.echo` | `<text>` | everyone | implemented | Repeat your text back |
 | `.ghost` | — | everyone | pending-definition | Reserved — behavior not defined yet |
 | `.hash` | `[algo] <text>` | everyone | implemented | Hash text with md5/sha1/sha256/sha512 |
 | `.palindrome` | `<text>` | everyone | implemented | Check whether text is a palindrome |
 | `.password` | `[length]` | everyone | implemented | Generate a random password (never reveals saved ones) |
 | `.qr` | `<text>` | everyone | implemented | Generate a QR code image from text |
-| `.reminder` | `<time> <text>` | everyone | partial | Set a reminder (in-memory; lost on restart) |
+| `.reminder` | `<time> <text>` | everyone | implemented | Set a reminder (persisted across restarts) |
+| `.reminders` | — | everyone | implemented | List your pending reminders |
 | `.reverse` | `<text>` | everyone | implemented | Reverse text |
-| `.screenshot` | `<url>` | everyone | stub-config-required | Screenshot a public web page (requires SCREENSHOT_API_URL) |
-| `.shorturl` | `<url>` | everyone | stub-config-required | Shorten a URL via your configured provider |
+| `.screenshot` | `<url>` | everyone | implemented | Screenshot a public web page (requires SCREENSHOT_API_URL) |
+| `.shorturl` | `<url>` | everyone | implemented | Shorten a public URL via the configured provider (is.gd by default) |
 | `.timestamp` | — | everyone | implemented | Show current Unix/ISO timestamps |
-| `.weather` | `<city>` | everyone | stub-config-required | Weather for a city (requires WEATHER_API_KEY) |
+| `.weather` | `<city>` | everyone | implemented | Current weather for a city (Open-Meteo) |
 
 ## Bot Information
 
